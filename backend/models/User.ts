@@ -41,6 +41,14 @@ export interface IUser extends Document {
   awardCurrency(xpGained: number, goldGained: number): IAwardResult;
 }
 
+export interface IUser extends Document {
+  username: string;
+  email: string;
+  // ... your other types
+  // Add this line right below awardCurrency:
+  deductCurrency(xpToDeduct: number, goldToDeduct: number): { leveledDown: boolean; newLevel: number };
+}
+
 // ── Model interface (for statics if needed later) ─────────────────
 export type IUserModel = Model<IUser>;
 
@@ -120,6 +128,26 @@ userSchema.methods.awardCurrency = function (
   }
 
   return { leveledUp, prevLevel, newLevel: this.level, xpGained, goldGained };
+};
+
+userSchema.methods.deductCurrency = function (
+  this: IUser,
+  xpToDeduct: number,
+  goldToDeduct: number
+) {
+  // 1. Subtract the currency safely, making sure gold never falls below 0
+  this.gold = Math.max(0, this.gold - goldToDeduct);
+  this.xp = Math.max(0, this.xp - xpToDeduct);
+
+  let leveledDown = false;
+
+  // 2. Roll back levels if total absolute XP drops below the current level's minimum entrance threshold
+  while (this.level > 1 && this.xp < Math.floor(100 * Math.pow(this.level, 1.5))) {
+    this.level -= 1;
+    leveledDown = true;
+  }
+
+  return { leveledDown, newLevel: this.level };
 };
 
 userSchema.set("toJSON", { virtuals: true });

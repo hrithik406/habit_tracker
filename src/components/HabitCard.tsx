@@ -8,7 +8,7 @@ import { getDateIsoInTimeZone } from "../utils/date";
 function streakColor(streak: number): string {
   if (streak >= 21) return "text-red-400";
   if (streak >= 14) return "text-orange-400";
-  if (streak >= 7)  return "text-yellow-400";
+  if (streak >= 7) return "text-yellow-400";
   return "text-slate-400";
 }
 
@@ -16,23 +16,23 @@ function streakColor(streak: number): string {
 // CircularProgress — SVG ring that fills as milestones complete
 // ─────────────────────────────────────────────────────────────────
 interface CircularProgressProps {
-  pct: number;          // 0-100
-  size?: number;        // px (default 36)
-  strokeWidth?: number; // px (default 3)
-  color: string;        // habit accent color
+  pct: number;
+  size?: number;
+  strokeWidth?: number;
+  color: string;
   isComplete: boolean;
+  showText?: boolean;
 }
 
 const CircularProgress = memo(function CircularProgress({
-  pct, size = 36, strokeWidth = 3, color, isComplete,
+  pct, size = 36, strokeWidth = 3, color, isComplete, showText = true
 }: CircularProgressProps) {
-  const r          = (size - strokeWidth) / 2;
+  const r = (size - strokeWidth) / 2;
   const circumference = 2 * Math.PI * r;
-  const offset     = circumference - (pct / 100) * circumference;
+  const offset = circumference - (pct / 100) * circumference;
 
-  // When 100 %: fill solid; below 100 %: use dash animation
-  const trackColor  = "#1e293b"; // slate-800
-  const ringColor   = pct === 100 ? color : color;
+  const trackColor = "#1e293b"; // slate-800
+  const ringColor = pct === 100 ? color : color;
   const ringOpacity = pct === 0 ? 0.25 : 1;
 
   return (
@@ -44,14 +44,12 @@ const CircularProgress = memo(function CircularProgress({
       aria-label={`${Math.round(pct)}% milestones complete`}
       role="img"
     >
-      {/* Track */}
       <circle
         cx={size / 2} cy={size / 2} r={r}
         fill="none"
         stroke={trackColor}
         strokeWidth={strokeWidth}
       />
-      {/* Progress ring */}
       <circle
         cx={size / 2} cy={size / 2} r={r}
         fill="none"
@@ -61,23 +59,23 @@ const CircularProgress = memo(function CircularProgress({
         strokeDasharray={circumference}
         strokeDashoffset={offset}
         opacity={ringOpacity}
-        // Rotate so the ring starts at 12 o'clock
         transform={`rotate(-90 ${size / 2} ${size / 2})`}
         style={{
           transition: "stroke-dashoffset 0.45s ease, stroke 0.3s ease, opacity 0.3s ease",
           willChange: "stroke-dashoffset",
         }}
       />
-      {/* Center: percentage text or check */}
-      <text
-        x={size / 2} y={size / 2}
-        textAnchor="middle" dominantBaseline="central"
-        fontSize={size * 0.28}
-        fill={pct === 100 ? color : "#94a3b8"}
-        fontWeight="700"
-      >
-        {pct === 100 ? "✓" : pct > 0 ? `${Math.round(pct)}` : ""}
-      </text>
+      {showText && (
+        <text
+          x={size / 2} y={size / 2}
+          textAnchor="middle" dominantBaseline="central"
+          fontSize={size * 0.28}
+          fill={pct === 100 ? color : "#94a3b8"}
+          fontWeight="700"
+        >
+          {pct === 100 ? "✓" : pct > 0 ? `${Math.round(pct)}` : ""}
+        </text>
+      )}
     </svg>
   );
 });
@@ -96,20 +94,22 @@ const MilestoneRow = memo(function MilestoneRow({ milestone, habitColor, onToggl
   return (
     <motion.button
       layout
-      onClick={() => !disabled && onToggle(milestone._id)}
-      disabled={disabled}
+      onClick={(e) => {
+        // 🔴 THE FIX: Forcefully stop browser quirks and trigger the toggle
+        e.preventDefault();
+        e.stopPropagation();
+        if (!disabled) onToggle(milestone._id);
+      }}
       className="w-full flex items-center gap-2.5 py-1.5 group text-left"
       whileTap={!disabled ? { scale: 0.98 } : undefined}
       aria-checked={milestone.isCompleted}
       role="checkbox"
     >
-      {/* Custom checkbox */}
       <div
-        className={`w-4 h-4 rounded flex items-center justify-center shrink-0 border transition-all duration-200 ${
-          milestone.isCompleted
+        className={`w-4 h-4 rounded flex items-center justify-center shrink-0 border transition-all duration-200 ${milestone.isCompleted
             ? "border-transparent"
             : "border-slate-600 group-hover:border-slate-400 bg-transparent"
-        }`}
+          }`}
         style={milestone.isCompleted ? { backgroundColor: habitColor } : undefined}
       >
         {milestone.isCompleted && (
@@ -118,10 +118,8 @@ const MilestoneRow = memo(function MilestoneRow({ milestone, habitColor, onToggl
           </svg>
         )}
       </div>
-
-      <span className={`text-xs transition-colors duration-200 leading-tight ${
-        milestone.isCompleted ? "line-through text-slate-500" : "text-slate-300 group-hover:text-white"
-      }`}>
+      <span className={`text-xs transition-colors duration-200 leading-tight ${milestone.isCompleted ? "line-through text-slate-500" : "text-slate-300 group-hover:text-white"
+        }`}>
         {milestone.title}
       </span>
     </motion.button>
@@ -181,7 +179,7 @@ function Spinner() {
 }
 
 // ─────────────────────────────────────────────────────────────────
-// Delete confirm button — two-tap pattern to avoid accidents
+// Delete confirm button
 // ─────────────────────────────────────────────────────────────────
 interface DeleteButtonProps { onConfirm: () => void; deleting: boolean; }
 
@@ -189,10 +187,10 @@ const DeleteButton = memo(function DeleteButton({ onConfirm, deleting }: DeleteB
   const [armed, setArmed] = useState(false);
 
   const handleClick = useCallback((e: React.MouseEvent) => {
-    e.stopPropagation(); // don't bubble to the card's complete handler
+    e.stopPropagation();
     if (!armed) {
       setArmed(true);
-      setTimeout(() => setArmed(false), 2500); // auto-disarm after 2.5 s
+      setTimeout(() => setArmed(false), 2500);
     } else {
       onConfirm();
     }
@@ -203,11 +201,10 @@ const DeleteButton = memo(function DeleteButton({ onConfirm, deleting }: DeleteB
       onClick={handleClick}
       whileTap={{ scale: 0.9 }}
       disabled={deleting}
-      className={`shrink-0 w-7 h-7 rounded-lg flex items-center justify-center transition-all duration-200 ${
-        armed
+      className={`shrink-0 w-7 h-7 rounded-lg flex items-center justify-center transition-all duration-200 ${armed
           ? "bg-red-500/20 text-red-400 ring-1 ring-red-500/50"
           : "text-slate-600 hover:text-red-400 hover:bg-slate-800"
-      }`}
+        }`}
       aria-label={armed ? "Confirm delete" : "Delete habit"}
       title={armed ? "Tap again to confirm" : "Delete habit"}
     >
@@ -216,10 +213,8 @@ const DeleteButton = memo(function DeleteButton({ onConfirm, deleting }: DeleteB
       ) : (
         <svg className="w-3.5 h-3.5" viewBox="0 0 16 16" fill="none">
           {armed ? (
-            // X icon when armed
             <path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
           ) : (
-            // Trash icon when idle
             <>
               <path d="M3 4h10M6 4V3a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1v1" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
               <path d="M5 4l.5 9h5L11 4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
@@ -236,42 +231,48 @@ const DeleteButton = memo(function DeleteButton({ onConfirm, deleting }: DeleteB
 // HabitCard — main component
 // ─────────────────────────────────────────────────────────────────
 const HabitCard = memo(function HabitCard({ habit }: { habit: Habit }): ReactElement {
-  const { user, completeHabit, toggleMilestone, deleteHabit } = useApp();
+  const { user, completeHabit, undoHabit, toggleMilestone, deleteHabit } = useApp();
   const shouldReduce = useReducedMotion();
 
-  const [completing, setCompleting]   = useState(false);
-  const [toggling, setToggling]       = useState<string | null>(null); // milestoneId in flight
-  const [deleting, setDeleting]       = useState(false);
-  const [error, setError]             = useState<string | null>(null);
-  const [reward, setReward]           = useState<RewardResult | null>(null);
+  const [completing, setCompleting] = useState(false);
+  const [toggling, setToggling] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [reward, setReward] = useState<RewardResult | null>(null);
   const [justCompleted, setJustCompleted] = useState(false);
-  const [expanded, setExpanded]       = useState(true); // milestones panel open by default
+  const [expanded, setExpanded] = useState(true);
 
   const todayIso = useMemo(() => getDateIsoInTimeZone(user?.timezone), [user?.timezone]);
   const isComplete = habit.lastCompletedDate === todayIso;
 
-  // ── Derived milestone stats ─────────────────────────────────────
   const { milestones } = habit;
-  const hasMilestones  = milestones.length > 0;
+  const hasMilestones = milestones.length > 0;
   const completedCount = useMemo(() => milestones.filter((m) => m.isCompleted).length, [milestones]);
-  const milestonePct   = useMemo(
+  const milestonePct = useMemo(
     () => hasMilestones ? Math.round((completedCount / milestones.length) * 100) : 0,
     [completedCount, milestones.length, hasMilestones]
   );
 
-  // ── Manual full-habit complete (no milestones, or override) ──────
   const handleComplete = useCallback(async (e: React.MouseEvent) => {
-    // Don't trigger if clicking inside the milestone list or buttons
     if ((e.target as HTMLElement).closest("[data-milestone-zone]")) return;
-    if (isComplete || completing || hasMilestones) return;
+    
+    // THE FIX: Block manual completion for incomplete milestone habits, 
+    // but ALLOW manual undoing for ALL completed habits!
+    if (completing || (!isComplete && hasMilestones)) return;
+    
     setCompleting(true);
     setError(null);
+    
     try {
-      const data = await completeHabit(habit._id);
-      setReward(data.rewards);
-      setJustCompleted(true);
-      setTimeout(() => setReward(null), 2200);
-      setTimeout(() => setJustCompleted(false), 900);
+      if (isComplete) {
+        await undoHabit(habit._id);
+      } else {
+        const data = await completeHabit(habit._id);
+        setReward(data.rewards);
+        setJustCompleted(true);
+        setTimeout(() => setReward(null), 2200);
+        setTimeout(() => setJustCompleted(false), 900);
+      }
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Something went wrong";
       setError(msg);
@@ -279,17 +280,15 @@ const HabitCard = memo(function HabitCard({ habit }: { habit: Habit }): ReactEle
     } finally {
       setCompleting(false);
     }
-  }, [completeHabit, habit._id, isComplete, completing, hasMilestones]);
+  }, [completeHabit, undoHabit, habit._id, isComplete, completing, hasMilestones]);
 
-  // ── Milestone toggle ────────────────────────────────────────────
   const handleToggle = useCallback(async (milestoneId: string) => {
     if (toggling || isComplete) return;
     setToggling(milestoneId);
     setError(null);
     try {
       const data = await toggleMilestone(habit._id, milestoneId);
-      // If all milestones triggered auto-complete, show reward
-      if (data.completion) {
+      if (data && data.completion) {
         setReward(data.completion.rewards);
         setJustCompleted(true);
         setTimeout(() => setReward(null), 2200);
@@ -304,7 +303,6 @@ const HabitCard = memo(function HabitCard({ habit }: { habit: Habit }): ReactEle
     }
   }, [toggleMilestone, habit._id, toggling, isComplete]);
 
-  // ── Delete ──────────────────────────────────────────────────────
   const handleDelete = useCallback(async () => {
     setDeleting(true);
     try { await deleteHabit(habit._id); }
@@ -321,11 +319,10 @@ const HabitCard = memo(function HabitCard({ habit }: { habit: Habit }): ReactEle
       whileTap={!isComplete && !hasMilestones ? { scale: 0.98 } : undefined}
       transition={{ type: "spring", stiffness: 380, damping: 28 }}
       style={{ willChange: "transform" }}
-      className={`relative rounded-2xl border select-none transition-colors duration-200 ${
-        isComplete
+      className={`relative rounded-2xl border select-none transition-colors duration-200 ${isComplete
           ? "bg-slate-800/60 border-slate-700/60"
           : "bg-slate-900 border-slate-700 hover:border-violet-500/40"
-      } ${!hasMilestones && !isComplete ? "cursor-pointer" : "cursor-default"}`}
+        } ${!hasMilestones && !isComplete ? "cursor-pointer" : "cursor-default"}`}
       onClick={!hasMilestones ? handleComplete : undefined}
       role={!hasMilestones ? "button" : undefined}
       aria-label={!hasMilestones ? `Mark ${habit.title} complete` : undefined}
@@ -342,38 +339,44 @@ const HabitCard = memo(function HabitCard({ habit }: { habit: Habit }): ReactEle
 
       {/* ── Card header ─────────────────────────────────────────── */}
       <div className="flex items-start gap-3 p-4">
-        {/* Icon */}
-        <motion.div
-          animate={justCompleted && !shouldReduce ? { scale: [1, 1.35, 1] } : { scale: 1 }}
-          transition={{ duration: 0.35, ease: [0.34, 1.56, 0.64, 1] }}
-          style={{ willChange: "transform" }}
-          className={`shrink-0 w-10 h-10 rounded-xl flex items-center justify-center text-xl ${
-            isComplete ? "bg-violet-600/30 ring-2 ring-violet-500/60" : ""
-          }`}
-          {...(!isComplete && { style: { backgroundColor: `${habit.color}22`, willChange: "transform" } })}
-        >
-          {isComplete ? "✅" : habit.icon}
-        </motion.div>
 
-        {/* Title + meta */}
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 flex-wrap">
-            {/* Circular progress — only shown when milestones exist */}
-            {hasMilestones && (
+        {/* Icon + Progress Ring Wrapper */}
+        <div className="relative flex items-center justify-center shrink-0 w-12 h-12">
+          {hasMilestones && (
+            <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
               <CircularProgress
                 pct={milestonePct}
                 color={habit.color}
                 isComplete={isComplete}
-                size={32}
-                strokeWidth={3}
+                size={45}
+                strokeWidth={2.5}
+                showText={false}
               />
-            )}
+            </div>
+          )}
 
+          {/* The Existing Icon (Sits inside the ring) */}
+          <motion.div
+            animate={justCompleted && !shouldReduce ? { scale: [1, 1.35, 1] } : { scale: 1 }}
+            transition={{ duration: 0.35, ease: [0.34, 1.56, 0.64, 1] }}
+            // Safely combine the animation style and dynamic background color here:
+            style={{
+              willChange: "transform",
+              backgroundColor: !isComplete ? `${habit.color}25` : `${habit.color}40`
+            }}
+            className={`relative z-10 w-10 h-10 rounded-full flex items-center justify-center text-xl`}
+          >
+            {isComplete ? "✅" : habit.icon}
+          </motion.div>
+        </div>
+
+        {/* Title + meta */}
+        <div className="flex-1 min-w-0 pt-0.5">
+          <div className="flex items-center gap-2 flex-wrap">
             <h3 className={`font-semibold text-sm truncate ${isComplete ? "line-through text-slate-500" : "text-white"}`}>
               {habit.title}
             </h3>
 
-            {/* Streak multiplier badge */}
             {(() => {
               const m = Math.min(Math.floor(habit.currentStreak / 7), 5);
               return m > 0 ? (
@@ -404,25 +407,29 @@ const HabitCard = memo(function HabitCard({ habit }: { habit: Habit }): ReactEle
 
         {/* Right actions: complete ring OR milestone toggle + delete */}
         <div className="flex items-center gap-1.5 shrink-0 pt-0.5">
-          {/* Complete indicator (no-milestone habits) */}
-          {!hasMilestones && (
-            completing ? <Spinner /> : (
-              <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-colors duration-150 ${
-                isComplete ? "border-violet-500 bg-violet-500" : "border-slate-600 hover:border-violet-400"
-              }`}>
-                {isComplete && (
-                  <motion.span
-                    initial={{ scale: 0, rotate: -20 }}
-                    animate={{ scale: 1, rotate: 0 }}
-                    transition={{ type: "spring", stiffness: 500, damping: 20 }}
-                    className="text-[10px] text-white font-bold"
-                  >✓</motion.span>
-                )}
-              </div>
-            )
-          )}
+          
+          {/* 1. COMPLETION & UNDO */}
+          {completing ? <Spinner /> : isComplete ? (
+            // UNDO BUTTON (Shows for ALL completed habits)
+            <button
+              onClick={(e) => {
+                e.stopPropagation(); // 🔴 CRITICAL FIX: Stops the click from bubbling up to the card!
+                handleComplete(e);
+              }}
+              className="group flex items-center justify-center w-7 h-7 rounded-full bg-slate-800 hover:bg-slate-700 transition-colors border border-slate-700"
+              title="Undo completion"
+              aria-label="Undo completion"
+            >
+              <svg className="w-3.5 h-3.5 text-slate-400 group-hover:text-white transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" />
+              </svg>
+            </button>
+          ) : !hasMilestones ? (
+            // EMPTY CIRCLE (Only for simple, incomplete habits)
+            <div className="w-5 h-5 rounded-full border-2 border-slate-600 hover:border-violet-400 flex items-center justify-center transition-colors duration-150" />
+          ) : null}
 
-          {/* Milestone expand/collapse toggle */}
+          {/* 2. MILESTONE CHEVRON (Only for habits with milestones) */}
           {hasMilestones && (
             <button
               onClick={(e) => { e.stopPropagation(); setExpanded((v) => !v); }}
@@ -440,7 +447,7 @@ const HabitCard = memo(function HabitCard({ habit }: { habit: Habit }): ReactEle
             </button>
           )}
 
-          {/* Delete */}
+          {/* 3. DELETE BUTTON */}
           <DeleteButton onConfirm={handleDelete} deleting={deleting} />
         </div>
       </div>
@@ -458,7 +465,6 @@ const HabitCard = memo(function HabitCard({ habit }: { habit: Habit }): ReactEle
             data-milestone-zone
           >
             <div className="px-4 pb-3 pt-0 border-t border-slate-800/60 mt-0">
-              {/* Progress label */}
               <div className="flex items-center justify-between mb-2 pt-2.5">
                 <span className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider">
                   Milestones
@@ -469,18 +475,16 @@ const HabitCard = memo(function HabitCard({ habit }: { habit: Habit }): ReactEle
                 </span>
               </div>
 
-              {/* Thin progress bar */}
               <div className="w-full h-1 bg-slate-800 rounded-full overflow-hidden mb-3">
                 <div
                   className="h-full rounded-full transition-[width] duration-500 ease-out"
                   style={{
-                    width:           `${milestonePct}%`,
+                    width: `${milestonePct}%`,
                     backgroundColor: milestonePct === 100 ? habit.color : `${habit.color}aa`,
                   }}
                 />
               </div>
 
-              {/* Milestone rows */}
               <div className="space-y-0.5">
                 {milestones.map((m) => (
                   <MilestoneRow
@@ -488,23 +492,15 @@ const HabitCard = memo(function HabitCard({ habit }: { habit: Habit }): ReactEle
                     milestone={m}
                     habitColor={habit.color}
                     onToggle={handleToggle}
-                    disabled={!!toggling || isComplete}
+                    disabled={isComplete}
                   />
                 ))}
               </div>
-
-              {/* Toggling spinner */}
-              {toggling && (
-                <div className="flex justify-center mt-2">
-                  <div className="w-3.5 h-3.5 border-2 border-violet-500 border-t-transparent rounded-full animate-spin" />
-                </div>
-              )}
             </div>
           </motion.div>
         )}
       </AnimatePresence>
 
-      {/* Error */}
       <AnimatePresence>
         {error && (
           <motion.p

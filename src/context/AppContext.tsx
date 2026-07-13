@@ -80,25 +80,33 @@ const api = {
       method: "DELETE",
     });
   },
+
+  undoHabit(habitId: string, userId: string): Promise<any> {
+    return apiFetch(`/habits/${habitId}/undo`, {
+      method: "POST",
+      body: JSON.stringify({ userId }),
+    });
+  },
 };
 
 // ── Reducer ───────────────────────────────────────────────────────
 type Action =
-  | { type: "SET_LOADING";     payload: boolean }
-  | { type: "SET_ERROR";       payload: string | null }
-  | { type: "SET_USER";        payload: User }
-  | { type: "SET_HABITS";      payload: Habit[] }
-  | { type: "UPDATE_HABIT";    payload: Habit }
-  | { type: "ADD_HABIT";       payload: Habit }
-  | { type: "REMOVE_HABIT";    payload: string }
+  | { type: "SET_LOADING"; payload: boolean }
+  | { type: "SET_ERROR"; payload: string | null }
+  | { type: "SET_USER"; payload: User }
+  | { type: "SET_HABITS"; payload: Habit[] }
+  | { type: "UPDATE_HABIT"; payload: Habit }
+  | { type: "ADD_HABIT"; payload: Habit }
+  | { type: "REMOVE_HABIT"; payload: string }
   | { type: "SET_LAST_REWARD"; payload: LastReward }
+  | { type: "OPTIMISTIC_TOGGLE"; payload: { habitId: string; milestoneId: string } }
   | { type: "CLEAR_REWARD" };
 
 const initialState: AppState = {
-  user:       null,
-  habits:     [],
-  loading:    false,
-  error:      null,
+  user: null,
+  habits: [],
+  loading: false,
+  error: null,
   lastReward: null,
 };
 
@@ -127,6 +135,22 @@ function reducer(state: AppState, action: Action): AppState {
       return { ...state, lastReward: action.payload };
     case "CLEAR_REWARD":
       return { ...state, lastReward: null };
+    case "OPTIMISTIC_TOGGLE":
+      return {
+        ...state,
+        habits: state.habits.map((h) => {
+          if (h._id !== action.payload.habitId) return h;
+          // Create a fake, instant update of the specific milestone
+          return {
+            ...h,
+            milestones: h.milestones.map((m) =>
+              m._id === action.payload.milestoneId
+                ? { ...m, isCompleted: !m.isCompleted }
+                : m
+            ),
+          };
+        }),
+      };
     default:
       return state;
   }
@@ -135,12 +159,13 @@ function reducer(state: AppState, action: Action): AppState {
 // ── Context shape ─────────────────────────────────────────────────
 interface AppContextValue extends AppState {
   userId: string;
-  fetchHabits:     ()                                      => Promise<void>;
-  completeHabit:   (habitId: string)                       => Promise<CompleteHabitResponse>;
-  createHabit:     (form: CreateHabitForm)                 => Promise<Habit>;
-  toggleMilestone: (habitId: string, milestoneId: string)  => Promise<ToggleMilestoneResponse>;
-  deleteHabit:     (habitId: string)                       => Promise<void>;
-  clearReward:     ()                                      => void;
+  fetchHabits: () => Promise<void>;
+  completeHabit: (habitId: string) => Promise<CompleteHabitResponse>;
+  createHabit: (form: CreateHabitForm) => Promise<Habit>;
+  toggleMilestone: (habitId: string, milestoneId: string) => Promise<ToggleMilestoneResponse>;
+  deleteHabit: (habitId: string) => Promise<void>;
+  undoHabit: (habitId: string) => Promise<void>;
+  clearReward: () => void;
 }
 
 const AppContext = createContext<AppContextValue | null>(null);
@@ -151,8 +176,30 @@ interface AppProviderProps {
   userId: string;
 }
 
+// Helper to grab saved state if it exists, otherwise use the blank state
+const loadInitialState = (): AppState => {
+  // Check if we are in the browser (fixes Next.js server-side rendering errors)
+  if (typeof window !== "undefined") {
+    const savedState = localStorage.getItem("habitTrackerState");
+    if (savedState) {
+      try {
+        return JSON.parse(savedState);
+      } catch (e) {
+        console.error("Failed to parse local storage state", e);
+      }
+    }
+  }
+  return initialState;
+};
+
 export function AppProvider({ children, userId }: AppProviderProps): ReactElement {
-  const [state, dispatch] = useReducer(reducer, initialState);
+  const [state, dispatch] = useReducer(reducer, loadInitialState());
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      localStorage.setItem("habitTrackerState", JSON.stringify(state));
+    }
+  }, [state]);
 
   // Load user once on mount
   useEffect(() => {
@@ -164,7 +211,7 @@ export function AppProvider({ children, userId }: AppProviderProps): ReactElemen
         api
           .getUser(userId)
           .then(({ user }) => dispatch({ type: "SET_USER", payload: user }))
-          .catch(() => {});
+          .catch(() => { });
       });
   }, [userId]);
 
@@ -191,8 +238,8 @@ export function AppProvider({ children, userId }: AppProviderProps): ReactElemen
       const data = await api.completeHabit(habitId, userId, timeZone).catch((err) => {
         throw new Error(err instanceof Error ? err.message : "Could not complete habit");
       });
-      dispatch({ type: "UPDATE_HABIT",    payload: data.habit });
-      dispatch({ type: "SET_USER",        payload: data.user });
+      dispatch({ type: "UPDATE_HABIT", payload: data.habit });
+      dispatch({ type: "SET_USER", payload: data.user });
       dispatch({
         type: "SET_LAST_REWARD",
         payload: { ...data.rewards, ...data.levelResult, ...data.streakResult },
@@ -200,6 +247,28 @@ export function AppProvider({ children, userId }: AppProviderProps): ReactElemen
       return data;
     },
     [userId, state.user?.timezone],
+  );
+
+  const undoHabit = useCallback(
+    async (habitId: string) => {
+      // 1. Save backup for rollback
+      const originalHabit = state.habits.find(h => h._id === habitId);
+      
+      try {
+        // 2. Talk to Express
+        const data = await api.undoHabit(habitId, userId);
+        
+        // 3. Update global state with the refunded data
+        dispatch({ type: "UPDATE_HABIT", payload: data.habit });
+        dispatch({ type: "SET_USER", payload: data.user });
+      } catch (err) {
+        if (originalHabit) {
+           dispatch({ type: "UPDATE_HABIT", payload: originalHabit });
+        }
+        throw new Error(err instanceof Error ? err.message : "Failed to undo");
+      }
+    },
+    [userId, state.habits]
   );
 
   // ── createHabit ───────────────────────────────────────────────
@@ -217,28 +286,46 @@ export function AppProvider({ children, userId }: AppProviderProps): ReactElemen
   // ── toggleMilestone ───────────────────────────────────────────
   const toggleMilestone = useCallback(
     async (habitId: string, milestoneId: string): Promise<ToggleMilestoneResponse> => {
-      const data = await api
-        .toggleMilestone(habitId, milestoneId, userId)
-        .catch((err) => {
-          throw new Error(
-            err instanceof Error ? err.message : "Failed to toggle milestone",
-          );
-        });
-      dispatch({ type: "UPDATE_HABIT", payload: data.habit });
-      if (data.completion) {
-        dispatch({ type: "SET_USER",        payload: data.completion.user });
-        dispatch({
-          type: "SET_LAST_REWARD",
-          payload: {
-            ...data.completion.rewards,
-            ...data.completion.levelResult,
-            ...data.completion.streakResult,
-          },
-        });
+      // 1. Snapshot the current habit in case we need to roll back
+      const originalHabit = state.habits.find(h => h._id === habitId);
+
+      // 2. INSTANT UI UPDATE: Dispatch the fake toggle immediately
+      dispatch({
+        type: "OPTIMISTIC_TOGGLE",
+        payload: { habitId, milestoneId }
+      });
+
+      // 3. BACKGROUND SYNC: Talk to the Express server
+      try {
+        const data = await api.toggleMilestone(habitId, milestoneId, userId);
+
+        // Overwrite the optimistic habit with the real, validated one from the server
+        dispatch({ type: "UPDATE_HABIT", payload: data.habit });
+
+        // Trigger gamification if this toggle completed the whole habit
+        if (data.completion) {
+          dispatch({ type: "SET_USER", payload: data.completion.user });
+          dispatch({
+            type: "SET_LAST_REWARD",
+            payload: {
+              ...data.completion.rewards,
+              ...data.completion.levelResult,
+              ...data.completion.streakResult,
+            },
+          });
+        }
+        return data;
+      } catch (err) {
+        // 4. ROLLBACK: If the server failed (e.g. offline), revert to the backup
+        if (originalHabit) {
+          dispatch({ type: "UPDATE_HABIT", payload: originalHabit });
+        }
+        throw new Error(
+          err instanceof Error ? err.message : "Failed to toggle milestone"
+        );
       }
-      return data;
     },
-    [userId],
+    [userId, state.habits]
   );
 
   // ── deleteHabit ───────────────────────────────────────────────
@@ -267,6 +354,7 @@ export function AppProvider({ children, userId }: AppProviderProps): ReactElemen
         createHabit,
         toggleMilestone,
         deleteHabit,
+        undoHabit,
         clearReward,
       }}
     >

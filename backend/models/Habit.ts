@@ -34,10 +34,11 @@ export interface IHabit extends Document {
   currentStreak: number;
   longestStreak: number;
   lastCompletedDate: string;
+  lastInteractedDate: string;        // ← NEW: Tracks partial interactions to prevent lazy rollover wipes
   baseXp: number;
   baseGold: number;
   completionLog: ICompletionLog[];
-  milestones: IMilestone[];          // ← NEW — array of sub-steps
+  milestones: IMilestone[];          // ← array of sub-steps
   isArchived: boolean;
   // virtuals
   streakMultiplier: number;
@@ -93,10 +94,11 @@ const habitSchema = new Schema<IHabit>(
     currentStreak:      { type: Number, default: 0, min: 0 },
     longestStreak:      { type: Number, default: 0, min: 0 },
     lastCompletedDate:  { type: String, default: "" },
+    lastInteractedDate: { type: String, default: "" }, // ← NEW: Initializes as empty string
     baseXp:             { type: Number, default: 20, min: 1 },
     baseGold:           { type: Number, default: 5,  min: 0 },
     completionLog:      [completionLogSchema],
-    milestones:         [milestoneSchema],   // ← NEW — defaults to []
+    milestones:         [milestoneSchema],   
     isArchived:         { type: Boolean, default: false },
   },
   { timestamps: true }

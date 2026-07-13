@@ -17,8 +17,8 @@ const DEFAULT_FORM: CreateHabitForm = {
   color: "#6366f1",
   frequency: "daily",
   customDays: [true, true, true, true, true, true, true],
-  baseXp: 20,
-  baseGold: 5,
+  baseXp: 10,
+  baseGold: 3,
   timeLimit: {},
   milestones: [],
 };
@@ -310,7 +310,7 @@ export default function AddHabitModal({ isOpen, onClose }: AddHabitModalProps): 
                   <label className="flex flex-col gap-1">
                     <span className="text-xs text-slate-400">Base XP ✨</span>
                     <input
-                      type="range" min={5} max={100} step={5}
+                      type="range" min={5} max={50} step={5}
                       value={form.baseXp}
                       onChange={(e) => set("baseXp", Number(e.target.value))}
                       className="accent-violet-500"
@@ -320,7 +320,7 @@ export default function AddHabitModal({ isOpen, onClose }: AddHabitModalProps): 
                   <label className="flex flex-col gap-1">
                     <span className="text-xs text-slate-400">Base Gold 🪙</span>
                     <input
-                      type="range" min={1} max={50} step={1}
+                      type="range" min={1} max={20} step={1}
                       value={form.baseGold}
                       onChange={(e) => set("baseGold", Number(e.target.value))}
                       className="accent-yellow-400"

@@ -8,7 +8,7 @@ import { ensureUser } from "../utils/ensureUser";
 const router = Router();
 
 // ── Shared types ──────────────────────────────────────────────────
-interface CompleteHabitBody  { userId: string; clientDate: string; }
+interface CompleteHabitBody { userId: string; clientDate: string; }
 interface CreateHabitBody {
   userId: string; title: string; description?: string;
   icon?: string; color?: string; frequency?: IHabit["frequency"];
@@ -27,7 +27,7 @@ function getYesterday(dateStr: string): string {
 function isValidClientDate(dateStr: string): boolean {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) return false;
   const provided = new Date(`${dateStr}T00:00:00Z`);
-  const today    = new Date(); today.setUTCHours(0,0,0,0);
+  const today = new Date(); today.setUTCHours(0, 0, 0, 0);
   return provided <= today;
 }
 
@@ -40,7 +40,7 @@ function computeRewards(baseXp: number, baseGold: number, streak: number): Compu
   const milestones = Math.min(Math.floor(streak / 7), 5);
   const multiplier = 1 + milestones * 0.05;
   return {
-    xpAwarded:  Math.round(baseXp   * multiplier),
+    xpAwarded: Math.round(baseXp * multiplier),
     goldAwarded: Math.round(baseGold * multiplier),
     multiplier,
   };
@@ -67,14 +67,14 @@ async function runHabitComplete(
   if (lastCompletedDate === currentDate) throw new Error("ALREADY_COMPLETED");
 
   let newStreak: number;
-  if      (lastCompletedDate === "")                      newStreak = 1;
+  if (lastCompletedDate === "") newStreak = 1;
   else if (lastCompletedDate === getYesterday(currentDate)) newStreak = habit.currentStreak + 1;
-  else                                                     newStreak = 1;
+  else newStreak = 1;
 
   const { xpAwarded, goldAwarded, multiplier } = computeRewards(habit.baseXp, habit.baseGold, newStreak);
 
-  habit.currentStreak    = newStreak;
-  habit.longestStreak    = Math.max(habit.longestStreak, newStreak);
+  habit.currentStreak = newStreak;
+  habit.longestStreak = Math.max(habit.longestStreak, newStreak);
   habit.lastCompletedDate = currentDate;
   habit.completionLog.push({ date: currentDate, xpAwarded, goldAwarded, streakAtCompletion: newStreak });
   await habit.save();
@@ -87,12 +87,12 @@ async function runHabitComplete(
   return {
     updatedHabit: habit,
     streakResult: {
-      previousStreak:   newStreak === 1 ? 0 : newStreak - 1,
+      previousStreak: newStreak === 1 ? 0 : newStreak - 1,
       newStreak,
       milestoneReached: newStreak % 7 === 0,
       multiplier,
     },
-    rewards:     { xpAwarded, goldAwarded },
+    rewards: { xpAwarded, goldAwarded },
     levelResult,
     user: {
       xp: user.xp, gold: user.gold, level: user.level, xpProgress: user.xpProgress,
@@ -107,7 +107,49 @@ router.get("/", async (req: Request, res: Response): Promise<void> => {
   try {
     const { userId } = req.query as { userId?: string };
     if (!userId) { res.status(400).json({ error: "userId is required" }); return; }
+    
+    const user = await ensureUser(userId);
+    const currentDate = getDateIsoInTimeZone(user.timezone);
+    const yesterday = getYesterday(currentDate); // ⬅️ Get yesterday's date using your helper function
+    
     const habits = await Habit.find({ userId, isArchived: false }).sort({ createdAt: 1 });
+    
+    for (let habit of habits) {
+      let needsSave = false;
+
+      // ── 1. LAZY ROLLOVER: BROKEN STREAK RESET ──
+      // If the habit wasn't completed today AND wasn't completed yesterday, the streak is dead.
+      if (
+        habit.currentStreak > 0 && 
+        habit.lastCompletedDate !== currentDate && 
+        habit.lastCompletedDate !== yesterday
+      ) {
+        habit.currentStreak = 0;
+        needsSave = true;
+      }
+
+      // ── 2. LAZY ROLLOVER: MILESTONE WIPE ──
+      // If the habit wasn't completed today, wipe the milestones for a fresh start
+      if (
+        habit.lastCompletedDate !== currentDate && 
+        habit.lastInteractedDate !== currentDate && 
+        habit.milestones.length > 0
+      ) {
+        const hasStuckMilestones = habit.milestones.some(m => m.isCompleted);
+
+        if (hasStuckMilestones) {
+          habit.milestones.forEach(m => m.isCompleted = false);
+          habit.markModified("milestones"); // Tell Mongoose the array changed!
+          needsSave = true;
+        }
+      }
+
+      // Save the cleaned-up habit to the database before sending to React
+      if (needsSave) {
+        await habit.save();
+      }
+    }
+    
     res.json({ habits });
   } catch (err) {
     res.status(500).json({ error: "Server error", details: (err as Error).message });
@@ -166,6 +208,61 @@ router.post(
 );
 
 // ─────────────────────────────────────────────────────────────────
+// // POST /api/habits/:id/undo
+// ─────────────────────────────────────────────────────────────────
+router.post("/:id/undo", async (req, res) => {
+  try {
+    const { userId } = req.body;
+    const user: any = await User.findById(userId); // Or ensureUser(userId)
+    const currentDate = new Date().toISOString().split("T")[0]; // Or your timezone util
+
+    const habit = await Habit.findOne({ _id: req.params.id, userId });
+    if (!habit) return res.status(404).json({ error: "Habit not found" });
+
+    // 1. Safety Check: Only undo if completed today
+    if (habit.lastCompletedDate !== currentDate) {
+      return res.status(400).json({ error: "Can only undo habits completed today" });
+    }
+
+    // 2. Find the Receipt
+    const lastLog = habit.completionLog[habit.completionLog.length - 1];
+
+    if (lastLog && lastLog.date === currentDate) {
+
+      // ── STEP 3 FIXED: Invoke our new clean database model logic ──
+      user.deductCurrency(lastLog.xpAwarded, lastLog.goldAwarded);
+      await user.save(); // Virtual triggers (xpProgress) automatically evaluate cleanly here!
+
+      // 4. Rollback Habit Stats
+      habit.completionLog.pop();
+      const previousLog = habit.completionLog[habit.completionLog.length - 1];
+      habit.lastCompletedDate = previousLog ? previousLog.date : "";
+      habit.currentStreak = lastLog.streakAtCompletion > 1 ? lastLog.streakAtCompletion - 1 : 0;
+    }
+
+    // 5. If it had milestones, uncheck the last one
+    if (habit.milestones && habit.milestones.length > 0) {
+      // Loop backwards to find the last completed milestone
+      for (let i = habit.milestones.length - 1; i >= 0; i--) {
+        if (habit.milestones[i].isCompleted) {
+          habit.milestones[i].isCompleted = false;
+
+          // CRITICAL: Tell Mongoose the array changed, or it won't save!
+          habit.markModified("milestones");
+          break;
+        }
+      }
+    }
+
+    await habit.save();
+    res.json({ message: "Undo successful", habit, user });
+
+  } catch (err: any) {
+    res.status(500).json({ error: "Server error", details: err.message });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────
 // PUT /api/habits/:id/milestone/:milestoneId
 //
 // Toggles isCompleted on the target milestone.
@@ -198,6 +295,9 @@ router.put(
       // ── Toggle ─────────────────────────────────────────────────
       milestone.isCompleted = !milestone.isCompleted;
 
+      // 🔴 ADD THIS CRITICAL LINE SO THE DATABASE ACTUALLY SAVES IT 🔴
+      habit.markModified("milestones");
+
       // ── Check if all milestones are now complete ───────────────
       const allDone = habit.milestones.length > 0
         && habit.milestones.every((m) => m.isCompleted);
@@ -213,17 +313,20 @@ router.put(
         const result = await runHabitComplete(habit, currentDate, userId);
 
         res.json({
-          message:    "All milestones completed — habit auto-completed!",
-          habit:      result.updatedHabit,
+          message: "All milestones completed — habit auto-completed!",
+          habit: result.updatedHabit,
           completion: {
             streakResult: result.streakResult,
-            rewards:      result.rewards,
-            levelResult:  result.levelResult,
-            user:         result.user,
+            rewards: result.rewards,
+            levelResult: result.levelResult,
+            user: result.user,
           },
         });
       } else {
         // ── Just save the toggle ───────────────────────────────
+        // ── THE FIX: Stamp the interaction date so it survives the rollover ──
+        habit.lastInteractedDate = currentDate;
+
         await habit.save();
         res.json({
           message: `Milestone ${milestone.isCompleted ? "completed" : "unchecked"}`,
