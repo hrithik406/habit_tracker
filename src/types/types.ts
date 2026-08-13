@@ -2,7 +2,7 @@
 export interface OwnedReward {
   itemId: string;
   name: string;
-  purchasedAt: Date;
+  purchasedAt: Date | string;
 }
 
 // ── XP progress breakdown ─────────────────────────────────────────
@@ -24,6 +24,15 @@ export interface User {
   ownedRewards: OwnedReward[];
   timezone: string;
   joinedAt: string;
+  activeTheme?: string | null;
+  activeAvatar?: string | null;
+  showcase?: (string | null)[];
+  activePowerups?: { itemId: string; expiresAt: string | Date }[];
+  stats?: {
+    totalHabitsCompleted: number;
+    totalAchievements: number;
+  };
+  unlockedAchievements: { achievementId: string; unlockedAt: Date; isClaimed: boolean }[];
 }
 
 // ── Completion log entry ──────────────────────────────────────────
@@ -118,6 +127,7 @@ export interface CompleteHabitResponse {
   levelResult: LevelResult;
   user: User;
   habit: Habit;
+  newlyUnlocked?: string[];
 }
 
 // ── Milestone toggle response ─────────────────────────────────────
@@ -153,4 +163,4 @@ export interface AppState {
 }
 
 // ── Nav ───────────────────────────────────────────────────────────
-export type RoutePath = "/dashboard" | "/habits" | "/rewards" | "/progress";
+export type RoutePath =  "/dashboard" | "/habits" | "/rewards" | "/progress" | "/achievements";

@@ -1,10 +1,10 @@
 "use client";
 import React, { ReactElement, useEffect, useMemo, useState } from "react";
-import { useApp } from "../../context/AppContext";
-import HabitCard from "../../components/HabitCard";
-import AddHabitModal from "../../components/AddHabitModal";
-import type { HabitFrequency } from "../../types/types";
-import { getDateIsoInTimeZone } from "../../utils/date";
+import { useApp } from "../../../context/AppContext";
+import HabitCard from "../../../components/HabitCard";
+import AddHabitModal from "../../../components/AddHabitModal";
+import type { HabitFrequency } from "../../../types/types";
+import { getDateIsoInTimeZone } from "../../../utils/date";
 
 type FilterOption = "all" | "active" | "completed" | HabitFrequency;
 

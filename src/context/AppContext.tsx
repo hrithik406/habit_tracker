@@ -87,6 +87,13 @@ const api = {
       body: JSON.stringify({ userId }),
     });
   },
+
+  equipReward(userId: string, itemId: string, category: string): Promise<any> {
+    return apiFetch(`/rewards/equip`, {
+      method: "POST",
+      body: JSON.stringify({ userId, itemId, category }),
+    });
+  },
 };
 
 // ── Reducer ───────────────────────────────────────────────────────
@@ -94,6 +101,7 @@ type Action =
   | { type: "SET_LOADING"; payload: boolean }
   | { type: "SET_ERROR"; payload: string | null }
   | { type: "SET_USER"; payload: User }
+  | { type: "UPDATE_USER"; payload: Partial<User> }
   | { type: "SET_HABITS"; payload: Habit[] }
   | { type: "UPDATE_HABIT"; payload: Habit }
   | { type: "ADD_HABIT"; payload: Habit }
@@ -118,6 +126,11 @@ function reducer(state: AppState, action: Action): AppState {
       return { ...state, error: action.payload, loading: false };
     case "SET_USER":
       return { ...state, user: action.payload };
+    case "UPDATE_USER":
+      return {
+        ...state,
+        user: state.user ? { ...state.user, ...action.payload } : null
+      };
     case "SET_HABITS":
       return { ...state, habits: action.payload };
     case "UPDATE_HABIT":
@@ -166,6 +179,9 @@ interface AppContextValue extends AppState {
   deleteHabit: (habitId: string) => Promise<void>;
   undoHabit: (habitId: string) => Promise<void>;
   clearReward: () => void;
+  updateUser: (partialUser: Partial<User>) => void;
+  toggleEquip: (itemId: string, category: string) => Promise<void>;
+  dispatch: React.Dispatch<Action>;
 }
 
 const AppContext = createContext<AppContextValue | null>(null);
@@ -238,12 +254,24 @@ export function AppProvider({ children, userId }: AppProviderProps): ReactElemen
       const data = await api.completeHabit(habitId, userId, timeZone).catch((err) => {
         throw new Error(err instanceof Error ? err.message : "Could not complete habit");
       });
+      
       dispatch({ type: "UPDATE_HABIT", payload: data.habit });
-      dispatch({ type: "SET_USER", payload: data.user });
+      dispatch({ type: "UPDATE_USER", payload: data.user });
+      
       dispatch({
         type: "SET_LAST_REWARD",
         payload: { ...data.rewards, ...data.levelResult, ...data.streakResult },
       });
+
+      // ── NEW: Trigger the Achievement Popup! ──
+      // @ts-ignore - we'll fix the type definition next if you haven't already
+      if (data.newlyUnlocked && data.newlyUnlocked.length > 0) {
+        window.dispatchEvent(
+          // @ts-ignore
+          new CustomEvent("achievement-unlocked", { detail: data.newlyUnlocked })
+        );
+      }
+
       return data;
     },
     [userId, state.user?.timezone],
@@ -251,16 +279,14 @@ export function AppProvider({ children, userId }: AppProviderProps): ReactElemen
 
   const undoHabit = useCallback(
     async (habitId: string) => {
-      // 1. Save backup for rollback
       const originalHabit = state.habits.find(h => h._id === habitId);
-      
       try {
-        // 2. Talk to Express
         const data = await api.undoHabit(habitId, userId);
         
-        // 3. Update global state with the refunded data
         dispatch({ type: "UPDATE_HABIT", payload: data.habit });
-        dispatch({ type: "SET_USER", payload: data.user });
+        
+        dispatch({ type: "UPDATE_USER", payload: data.user });
+        
       } catch (err) {
         if (originalHabit) {
            dispatch({ type: "UPDATE_HABIT", payload: originalHabit });
@@ -303,8 +329,10 @@ export function AppProvider({ children, userId }: AppProviderProps): ReactElemen
         dispatch({ type: "UPDATE_HABIT", payload: data.habit });
 
         // Trigger gamification if this toggle completed the whole habit
-        if (data.completion) {
-          dispatch({ type: "SET_USER", payload: data.completion.user });
+       if (data.completion) {
+          
+          dispatch({ type: "UPDATE_USER", payload: data.completion.user });
+          
           dispatch({
             type: "SET_LAST_REWARD",
             payload: {
@@ -313,6 +341,12 @@ export function AppProvider({ children, userId }: AppProviderProps): ReactElemen
               ...data.completion.streakResult,
             },
           });
+          if (data.completion.newlyUnlocked && data.completion.newlyUnlocked.length > 0) {
+            window.dispatchEvent(
+              // @ts-ignore
+              new CustomEvent("achievement-unlocked", { detail: data.completion.newlyUnlocked })
+            );
+          }
         }
         return data;
       } catch (err) {
@@ -344,6 +378,27 @@ export function AppProvider({ children, userId }: AppProviderProps): ReactElemen
     [],
   );
 
+  const updateUser = useCallback(
+    (partialUser: Partial<User>) => dispatch({ type: "UPDATE_USER", payload: partialUser }),
+    []
+  );
+
+  const toggleEquip = useCallback(
+    async (itemId: string, category: string) => {
+      try {
+        // 1. Talk to Express
+        const data = await api.equipReward(userId, itemId, category);
+        
+        // 2. Instantly update the UI using the reducer we built earlier!
+        dispatch({ type: "UPDATE_USER", payload: data.user });
+      } catch (err) {
+        console.error("Failed to equip item:", err);
+        throw err;
+      }
+    },
+    [userId]
+  );
+
   return (
     <AppContext.Provider
       value={{
@@ -356,6 +411,9 @@ export function AppProvider({ children, userId }: AppProviderProps): ReactElemen
         deleteHabit,
         undoHabit,
         clearReward,
+        updateUser,
+        toggleEquip,
+        dispatch
       }}
     >
       {children}

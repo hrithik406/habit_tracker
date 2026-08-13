@@ -2,13 +2,13 @@
 import React, { useEffect, useMemo, useState, memo, ReactElement } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import Link from "next/link";
-import { useApp } from "../../context/AppContext";
-import BentoGrid, { BentoFull, BentoHalf, BentoQuarter } from "../../components/BentoGrid";
-import HabitCard from "../../components/HabitCard";
-import ContributionGraph from "../../components/ContributionGraph";
-import AddHabitModal from "../../components/AddHabitModal";
+import { useApp } from "../../../context/AppContext";
+import BentoGrid, { BentoFull, BentoHalf, BentoQuarter } from "../../../components/BentoGrid";
+import HabitCard from "../../../components/HabitCard";
+import ContributionGraph from "../../../components/ContributionGraph";
+import AddHabitModal from "../../../components/AddHabitModal";
 import type { CompletionLogEntry, LastReward } from "@/types/types";
-import { getDateIsoInTimeZone } from "../../utils/date";
+import { getDateIsoInTimeZone } from "../../../utils/date";
 
 const LevelUpToast = memo(function LevelUpToast({
   reward, onDismiss,

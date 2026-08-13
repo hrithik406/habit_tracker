@@ -31,3 +31,63 @@ body {
  
 /* Safe area for bottom nav on iOS */
 .safe-area-pb { padding-bottom: env(safe-area-inset-bottom, 0); }
+
+
+/* 
+  1. OBSIDIAN THEME (Pitch Black & Blue)
+  Overrides the default slate background to true black, and turns the violet accents into ice blue. 
+*/
+.theme-obsidian {
+  --color-slate-950: #000000;
+  --color-slate-900: #0a0a0a;
+  --color-slate-800: #171717;
+  --color-slate-700: #262626;
+  
+  --color-violet-600: #2563eb; /* Blue-600 */
+  --color-violet-500: #3b82f6; /* Blue-500 */
+  --color-violet-400: #60a5fa; /* Blue-400 */
+}
+
+/* 
+  2. AURORA THEME (Deep Space & Neon Green)
+  Overrides the slate background to deep space blue, and turns the violet accents into neon green. 
+*/
+.theme-aurora {
+  --color-slate-950: #020617; /* Slate-950 is now very dark blue */
+  --color-slate-900: #0f172a; /* Slate-900 */
+  --color-slate-800: #1e293b; /* Slate-800 */
+  --color-slate-700: #334155; /* Slate-700 */
+  
+  --color-violet-600: #10b981; /* Emerald-500 */
+  --color-violet-500: #34d399; /* Emerald-400 */
+  --color-violet-400: #6ee7b7; /* Emerald-300 */
+}
+
+/* 
+  3. MONOCHROME PREMIUM (Pristine White & Jet Black)
+  Inverts the app to a high-end, bright, luxurious aesthetic.
+*/
+.theme-monochrome {
+  /* 1. Turn dark backgrounds into pristine white and light silver */
+  --color-slate-950: #f4f4f5; /* Main background becomes light silver */
+  --color-slate-900: #ffffff; /* Cards become pure white */
+  --color-slate-800: #e4e4e7; /* Borders become light gray */
+  --color-slate-700: #d4d4d8; /* Hover states */
+  
+  /* 2. Turn white text into Jet Black */
+  --color-white: #09090b; 
+  
+  /* 3. Turn gray text into dark gray so it's readable on white */
+  --color-slate-400: #525252; 
+  --color-slate-300: #3f3f46; 
+  
+  /* 4. Turn the Violet buttons into sleek Pitch Black */
+  --color-violet-600: #000000; /* Pure Black buttons */
+  --color-violet-500: #27272a; /* Slightly lighter black on hover */
+  --color-violet-400: #000000; 
+
+  /* 5. Darken the UI accents (Gold/Success/Error) so they don't vanish on white */
+  --color-yellow-400: #b45309; 
+  --color-emerald-400: #059669; 
+  --color-red-400: #dc2626; 
+}

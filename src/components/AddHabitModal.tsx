@@ -6,7 +6,25 @@ import type { CreateHabitForm, HabitFrequency } from "../types/types";
 import { getDateIsoInTimeZone } from "../utils/date";
 
 // ── Constants ─────────────────────────────────────────────────────
-const EMOJI_OPTIONS = ["⚡", "🔥", "💪", "🧘", "📚", "🏃", "🥗", "💧", "🎯", "🎸", "✍️", "🧠", "🌿", "😴", "🚴", "🏋️", "🧹", "💻", "🎨", "🫀"];
+// 10 Free Default Icons (Basics)
+const EMOJI_OPTIONS = ["⚡", "🔥", "💪", "🧘", "📚", "🏃", "🥗", "💧", "😴", "🧹"];
+
+// 🏆 Premium Shop Icons (Must be purchased!)
+const PREMIUM_BADGES = [
+  { id: "avatar_dragon", icon: "🐉" },
+  { id: "badge_legend", icon: "👑" },
+  { id: "badge_target", icon: "🎯" },
+  { id: "badge_music", icon: "🎸" },
+  { id: "badge_writer", icon: "✍️" },
+  { id: "badge_brain", icon: "🧠" },
+  { id: "badge_nature", icon: "🌿" },
+  { id: "badge_cycle", icon: "🚴" },
+  { id: "badge_lift", icon: "🏋️" },
+  { id: "badge_tech", icon: "💻" },
+  { id: "badge_art", icon: "🎨" },
+  { id: "badge_heart", icon: "🫀" }
+];
+
 const COLOR_OPTIONS = ["#6366f1", "#8b5cf6", "#ec4899", "#ef4444", "#f97316", "#eab308", "#22c55e", "#06b6d4", "#3b82f6", "#14b8a6"];
 const DAY_LABELS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
@@ -43,7 +61,6 @@ const LabeledInput = memo(({ label, ...props }: InputProps) => (
 ));
 LabeledInput.displayName = "LabeledInput";
 
-// Inline input to add a single milestone title
 const MilestoneInput = memo(function MilestoneInput({ onAdd }: { onAdd: (title: string) => void }) {
   const [val, setVal] = useState("");
   const submit = () => {
@@ -82,19 +99,26 @@ interface AddHabitModalProps {
 }
 
 export default function AddHabitModal({ isOpen, onClose }: AddHabitModalProps): ReactElement {
-  const { createHabit } = useApp();
+  // 1. Grab the user object from context so we can check their inventory
+  const { createHabit, user } = useApp();
   const [form, setForm] = useState<CreateHabitForm>(DEFAULT_FORM);
   const browserTimeZone = useMemo(() => Intl.DateTimeFormat().resolvedOptions().timeZone, []);
   const todayIso = useMemo(() => getDateIsoInTimeZone(browserTimeZone), [browserTimeZone]);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Reset form every time modal opens
+  // 2. Filter out only the premium badges the user actually owns!
+  const unlockedPremiumIcons = useMemo(() => {
+    if (!user?.ownedRewards) return [];
+    return PREMIUM_BADGES.filter(badge => 
+      user.ownedRewards.some((reward: any) => reward.itemId === badge.id)
+    ).map(b => b.icon);
+  }, [user?.ownedRewards]);
+
   useEffect(() => {
     if (isOpen) { setForm(DEFAULT_FORM); setError(null); }
   }, [isOpen]);
 
-  // Close on Escape
   useEffect(() => {
     if (!isOpen) return;
     const handler = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
@@ -148,7 +172,6 @@ export default function AddHabitModal({ isOpen, onClose }: AddHabitModalProps): 
     <AnimatePresence>
       {isOpen && (
         <>
-          {/* Backdrop */}
           <motion.div
             key="backdrop"
             initial={{ opacity: 0 }}
@@ -159,7 +182,6 @@ export default function AddHabitModal({ isOpen, onClose }: AddHabitModalProps): 
             onClick={onClose}
           />
 
-          {/* Modal panel */}
           <motion.div
             key="modal"
             initial={{ opacity: 0, y: 48, scale: 0.96 }}
@@ -171,7 +193,6 @@ export default function AddHabitModal({ isOpen, onClose }: AddHabitModalProps): 
                        z-50 w-full sm:max-w-lg bg-slate-900 border border-slate-700 rounded-t-2xl sm:rounded-2xl
                        shadow-2xl max-h-[92dvh] flex flex-col"
           >
-            {/* Header */}
             <div className="flex items-center justify-between px-5 pt-5 pb-3 border-b border-slate-800 shrink-0">
               <div className="flex items-center gap-2">
                 <span className="text-xl">{form.icon}</span>
@@ -186,10 +207,8 @@ export default function AddHabitModal({ isOpen, onClose }: AddHabitModalProps): 
               </button>
             </div>
 
-            {/* Scrollable body */}
             <div className="overflow-y-auto flex-1 px-5 py-4 space-y-5">
 
-              {/* Title + description */}
               <div className="space-y-3">
                 <LabeledInput
                   label="Title *"
@@ -208,7 +227,7 @@ export default function AddHabitModal({ isOpen, onClose }: AddHabitModalProps): 
                 />
               </div>
 
-              {/* Icon picker */}
+              {/* ── Icon picker (Now with Premium Section!) ── */}
               <div>
                 <SectionLabel>Icon</SectionLabel>
                 <div className="flex flex-wrap gap-2">
@@ -223,6 +242,30 @@ export default function AddHabitModal({ isOpen, onClose }: AddHabitModalProps): 
                     </button>
                   ))}
                 </div>
+
+                {/* Only render this if they have bought badges! */}
+                {unlockedPremiumIcons.length > 0 && (
+                  <div className="mt-4 pt-3 border-t border-slate-700">
+                    <div className="flex items-center gap-2 mb-2">
+                      <span className="text-xs font-semibold text-yellow-500 uppercase tracking-wider">Premium Unlocks</span>
+                      <span className="text-xs">✨</span>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      {unlockedPremiumIcons.map((emoji) => (
+                        <button
+                          key={emoji}
+                          onClick={() => set("icon", emoji)}
+                          className={`w-9 h-9 rounded-lg text-lg flex items-center justify-center transition-all
+                            ${form.icon === emoji 
+                              ? "ring-2 ring-yellow-400 bg-yellow-400/20 scale-110 shadow-[0_0_15px_rgba(250,204,21,0.2)]" 
+                              : "bg-slate-800 border border-yellow-500/30 hover:bg-slate-700 hover:border-yellow-500/60"}`}
+                        >
+                          {emoji}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* Color picker */}
@@ -257,7 +300,6 @@ export default function AddHabitModal({ isOpen, onClose }: AddHabitModalProps): 
                   ))}
                 </div>
 
-                {/* Custom day toggles */}
                 {form.frequency === "custom" && (
                   <div className="flex gap-1.5 mt-3 flex-wrap">
                     {DAY_LABELS.map((d, i) => (
@@ -329,7 +371,6 @@ export default function AddHabitModal({ isOpen, onClose }: AddHabitModalProps): 
                   </label>
                 </div>
               </div>
-
 
               {/* Milestones */}
               <div>

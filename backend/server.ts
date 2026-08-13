@@ -4,6 +4,7 @@ import mongoose from "mongoose";
 import cors from "cors";
 import habitRoutes from "./routes/habitRoutes";
 import userRoutes  from "./routes/userRoutes";
+import rewardRoutes from "./routes/rewardRoutes";
 
 const app: Application = express();
 
@@ -12,6 +13,7 @@ app.use(express.json());
 
 app.use("/api/habits", habitRoutes);
 app.use("/api/users",  userRoutes);
+app.use("/api/rewards",  rewardRoutes);
 
 app.get("/api/health", (_req: Request, res: Response) => res.json({ status: "ok" }));
 

@@ -34,19 +34,25 @@ export interface IUser extends Document {
   ownedRewards: IOwnedReward[];
   timezone: string;
   joinedAt: Date;
+  activeTheme: string | null;
+  activeAvatar: string | null;
+  showcase?: (string | null)[];
+  activePowerups: { itemId: string; expiresAt: Date }[]; // ⬅️ Changed to an array of object
+
   // virtuals
   xpForNextLevel: number;
   xpProgress: IXpProgress;
+
   // methods
   awardCurrency(xpGained: number, goldGained: number): IAwardResult;
-}
-
-export interface IUser extends Document {
-  username: string;
-  email: string;
-  // ... your other types
-  // Add this line right below awardCurrency:
   deductCurrency(xpToDeduct: number, goldToDeduct: number): { leveledDown: boolean; newLevel: number };
+  // Stats
+  stats: {
+    totalHabitsCompleted: number;
+    totalAchievements: number;
+  };
+
+  unlockedAchievements: { achievementId: string; unlockedAt: Date; isClaimed: boolean }[];
 }
 
 // ── Model interface (for statics if needed later) ─────────────────
@@ -86,6 +92,31 @@ const userSchema = new Schema<IUser>(
     ownedRewards: [rewardSchema],
     timezone: { type: String, default: "UTC" },
     joinedAt: { type: Date, default: Date.now },
+
+    // ⬇️ 2. ADDED THESE THREE LINES TO THE MONGOOSE SCHEMA ⬇️
+    activeTheme: { type: String, default: null },
+    activeAvatar: { type: String, default: null },
+    showcase: { type: [String], default: [null, null, null, null] },
+    activePowerups: {
+      type: [{ itemId: String, expiresAt: Date }],
+      default: []
+    }, // ⬅️ Changed to an array of objects
+
+    // Stats
+    stats: {
+      totalHabitsCompleted: { type: Number, default: 0 },
+      totalAchievements: { type: Number, default: 0 }
+    },
+
+    // Unlocked Achievements
+    unlockedAchievements: {
+      type: [{
+        achievementId: { type: String, required: true },
+        unlockedAt: { type: Date, default: Date.now },
+        isClaimed: { type: Boolean, default: false } // ⬅️ NEW: Tracks if the user clicked "Claim"
+      }],
+      default: []
+    },
   },
   { timestamps: true }
 );

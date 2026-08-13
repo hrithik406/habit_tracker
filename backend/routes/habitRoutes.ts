@@ -4,6 +4,7 @@ import Habit, { IHabit } from "../models/Habit";
 import User from "../models/User";
 import { getDateIsoInTimeZone } from "../utils/date";
 import { ensureUser } from "../utils/ensureUser";
+import { evaluateAchievements } from "../utils/achievementsEngine";
 
 const router = Router();
 
@@ -22,13 +23,6 @@ function getYesterday(dateStr: string): string {
   const d = new Date(`${dateStr}T00:00:00Z`);
   d.setUTCDate(d.getUTCDate() - 1);
   return d.toISOString().split("T")[0];
-}
-
-function isValidClientDate(dateStr: string): boolean {
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) return false;
-  const provided = new Date(`${dateStr}T00:00:00Z`);
-  const today = new Date(); today.setUTCHours(0, 0, 0, 0);
-  return provided <= today;
 }
 
 /**
@@ -57,6 +51,7 @@ async function runHabitComplete(
   userId: string
 ): Promise<{
   updatedHabit: IHabit;
+  newlyUnlocked: object;
   streakResult: object;
   rewards: object;
   levelResult: object;
@@ -66,36 +61,116 @@ async function runHabitComplete(
 
   if (lastCompletedDate === currentDate) throw new Error("ALREADY_COMPLETED");
 
+  const user = await User.findById(userId);
+  if (!user) throw new Error("User not found");
+
+  // 1. Clean up any expired powerups before checking them
+  const now = new Date();
+  user.activePowerups = user.activePowerups.filter((p: any) => new Date(p.expiresAt) > now);
+
+  let newlyUnlockedIds: string[] = [];
+
+  // 2. Check for Streak Shield!
   let newStreak: number;
-  if (lastCompletedDate === "") newStreak = 1;
-  else if (lastCompletedDate === getYesterday(currentDate)) newStreak = habit.currentStreak + 1;
-  else newStreak = 1;
+  const missedYesterday = lastCompletedDate !== "" && lastCompletedDate !== getYesterday(currentDate);
+  const hasShield = user.activePowerups.some((p: any) => p.itemId === "streak_shield");
 
-  const { xpAwarded, goldAwarded, multiplier } = computeRewards(habit.baseXp, habit.baseGold, newStreak);
+  if (lastCompletedDate === "") {
+    newStreak = 1; // Brand new habit
+  } else if (lastCompletedDate === getYesterday(currentDate)) {
+    newStreak = habit.currentStreak + 1; // Perfect streak
+  } else if (missedYesterday && hasShield) {
+    // 🛡️ SHIELD ACTIVATED! Save the streak and consume the shield!
+    newStreak = habit.currentStreak + 1;
+    user.activePowerups = user.activePowerups.filter((p: any) => p.itemId !== "streak_shield");
 
+    // ⬇️ ADD THIS NEW BLOCK: Give them the Close Call achievement! ⬇️
+    const hasEcoShield = user.unlockedAchievements.some((a: any) => a.achievementId === "eco_shield");
+    if (!hasEcoShield) {
+      user.unlockedAchievements.push({
+        achievementId: "eco_shield",
+        unlockedAt: new Date(),
+        isClaimed: false
+      } as any);
+      newlyUnlockedIds.push("eco_shield"); // ⬅️ Ensures the frontend sees it!
+    }
+    // ⬆️ END OF NEW BLOCK ⬆️
+
+  } else {
+    newStreak = 1; // Streak broken :(
+  }
+
+  // 3. Calculate Base Rewards
+  const { xpAwarded: baseXpAwarded, goldAwarded, multiplier } = computeRewards(habit.baseXp, habit.baseGold, newStreak);
+
+  // 4. Check for XP Surge!
+  let finalXpAwarded = baseXpAwarded;
+  const hasXpBoost = user.activePowerups.some((p: any) => p.itemId === "xp_boost");
+  if (hasXpBoost) {
+    finalXpAwarded = Math.round(baseXpAwarded * 2); // ⚡️ DOUBLE THE XP!
+  }
+
+  // 5. Save Habit Data
   habit.currentStreak = newStreak;
   habit.longestStreak = Math.max(habit.longestStreak, newStreak);
   habit.lastCompletedDate = currentDate;
-  habit.completionLog.push({ date: currentDate, xpAwarded, goldAwarded, streakAtCompletion: newStreak });
+  habit.completionLog.push({ date: currentDate, xpAwarded: finalXpAwarded, goldAwarded, streakAtCompletion: newStreak });
   await habit.save();
 
-  const user = await User.findById(userId);
-  if (!user) throw new Error("User not found");
-  const levelResult = user.awardCurrency(xpAwarded, goldAwarded);
+  // 6. Update Lifetime Stats & Currency
+  if (!user.stats) {
+    user.stats = { totalHabitsCompleted: 0, totalAchievements: 0 };
+  }
+
+  // Increment total habits
+  user.stats.totalHabitsCompleted += 1;
+
+  // ── NEW: RUN THE ACHIEVEMENT ENGINE ──
+  const { newlyUnlocked } = evaluateAchievements(user, newStreak);
+
+  // Merge the dynamically unlocked ones with the Shield achievement (if triggered)
+  newlyUnlockedIds = [...newlyUnlockedIds, ...newlyUnlocked];
+
+  // Add the newly unlocked achievements to the user's lifetime total
+  user.stats.totalAchievements += newlyUnlocked.length;
+
+  // ⬅️ FIX 1: ACTUALLY DEPOSIT THE BASE REWARDS INTO THE USER'S ACCOUNT!
+ const awardResult = user.awardCurrency(finalXpAwarded, goldAwarded);
+
+  // Check for Streak Milestone Achievement (Every 7 days)
+  const milestoneReached = newStreak > 0 && newStreak % 7 === 0;
+  if (milestoneReached) {
+    user.stats.totalAchievements += 1; 
+  } 
+
   await user.save();
+
+  // 2. PASS THE LEVELED UP FLAG TO THE FRONTEND
+  const levelResult = {
+    level: user.level,
+    xp: user.xp,
+    xpProgress: user.xpProgress,
+    leveledUp: awardResult.leveledUp, // ⬅️ THIS FIXES THE POPUP!
+    prevLevel: awardResult.prevLevel
+  };
 
   return {
     updatedHabit: habit,
+    newlyUnlocked : newlyUnlockedIds, // ⬅️ The router will automatically pass this to the frontend!
     streakResult: {
       previousStreak: newStreak === 1 ? 0 : newStreak - 1,
       newStreak,
-      milestoneReached: newStreak % 7 === 0,
+      milestoneReached,
       multiplier,
+      shieldUsed: missedYesterday && hasShield,
     },
-    rewards: { xpAwarded, goldAwarded },
+    rewards: { xpAwarded: finalXpAwarded, goldAwarded, xpBoostActive: hasXpBoost },
     levelResult,
     user: {
       xp: user.xp, gold: user.gold, level: user.level, xpProgress: user.xpProgress,
+      activePowerups: user.activePowerups,
+      stats: user.stats, // ⬅️ Send stats to the frontend!
+      unlockedAchievements: user.unlockedAchievements // Send to frontend to update the UI
     },
   };
 }
@@ -107,21 +182,21 @@ router.get("/", async (req: Request, res: Response): Promise<void> => {
   try {
     const { userId } = req.query as { userId?: string };
     if (!userId) { res.status(400).json({ error: "userId is required" }); return; }
-    
+
     const user = await ensureUser(userId);
     const currentDate = getDateIsoInTimeZone(user.timezone);
     const yesterday = getYesterday(currentDate); // ⬅️ Get yesterday's date using your helper function
-    
+
     const habits = await Habit.find({ userId, isArchived: false }).sort({ createdAt: 1 });
-    
+
     for (let habit of habits) {
       let needsSave = false;
 
       // ── 1. LAZY ROLLOVER: BROKEN STREAK RESET ──
       // If the habit wasn't completed today AND wasn't completed yesterday, the streak is dead.
       if (
-        habit.currentStreak > 0 && 
-        habit.lastCompletedDate !== currentDate && 
+        habit.currentStreak > 0 &&
+        habit.lastCompletedDate !== currentDate &&
         habit.lastCompletedDate !== yesterday
       ) {
         habit.currentStreak = 0;
@@ -131,8 +206,8 @@ router.get("/", async (req: Request, res: Response): Promise<void> => {
       // ── 2. LAZY ROLLOVER: MILESTONE WIPE ──
       // If the habit wasn't completed today, wipe the milestones for a fresh start
       if (
-        habit.lastCompletedDate !== currentDate && 
-        habit.lastInteractedDate !== currentDate && 
+        habit.lastCompletedDate !== currentDate &&
+        habit.lastInteractedDate !== currentDate &&
         habit.milestones.length > 0
       ) {
         const hasStuckMilestones = habit.milestones.some(m => m.isCompleted);
@@ -149,7 +224,7 @@ router.get("/", async (req: Request, res: Response): Promise<void> => {
         await habit.save();
       }
     }
-    
+
     res.json({ habits });
   } catch (err) {
     res.status(500).json({ error: "Server error", details: (err as Error).message });
@@ -231,6 +306,10 @@ router.post("/:id/undo", async (req, res) => {
 
       // ── STEP 3 FIXED: Invoke our new clean database model logic ──
       user.deductCurrency(lastLog.xpAwarded, lastLog.goldAwarded);
+      // ── NEW: Deduct from lifetime stats ──
+      if (user.stats && user.stats.totalHabitsCompleted > 0) {
+        user.stats.totalHabitsCompleted -= 1;
+      }
       await user.save(); // Virtual triggers (xpProgress) automatically evaluate cleanly here!
 
       // 4. Rollback Habit Stats

@@ -1,7 +1,7 @@
 "use client";
 import React, { ReactElement, useEffect, useMemo } from "react";
-import { useApp } from "../../context/AppContext";
-import ContributionGraph from "../../components/ContributionGraph";
+import { useApp } from "../../../context/AppContext";
+import ContributionGraph from "../../../components/ContributionGraph";
 import type { CompletionLogEntry } from "@/types/types";
 
 export default function ProgressPage(): ReactElement{

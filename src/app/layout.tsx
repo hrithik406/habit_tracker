@@ -3,6 +3,7 @@ import { Geist, Geist_Mono } from "next/font/google";
 import type { ReactNode } from "react";
 import Providers from "./providers";
 import DashboardLayout from "../components/DashboardLayout";
+import ThemeInjector from "@/components/ThemeInjector";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -26,15 +27,15 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html
-      lang="en"
-      className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
-    >
-      <body className="min-h-full bg-slate-950 text-white flex flex-col">
+    // Add suppressHydrationWarning here to tell React to ignore extension injections
+    <html lang="en" suppressHydrationWarning>
+      <body
+        className="min-h-full bg-slate-950 text-white flex flex-col"
+        suppressHydrationWarning // AND add it here just to be safe!
+      >
         <Providers>
-          <DashboardLayout>
+          <ThemeInjector />
             {children}
-          </DashboardLayout>
         </Providers>
       </body>
     </html>
