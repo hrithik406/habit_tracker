@@ -2,13 +2,13 @@
 
 import React, { useState } from "react";
 import { motion } from "framer-motion";
-import { useApp } from "@/context/AppContext"; 
-import { ACHIEVEMENTS_DATA } from "@/../shared/achievement"; 
+import { useApp } from "@/context/AppContext";
+import { ACHIEVEMENTS_DATA } from "@/../shared/achievement";
 
 export default function AchievementsPage() {
   // 1. Grab dispatch so we can instantly update the user's Gold & XP
-  const { user, dispatch } = useApp(); 
-  
+  const { user, dispatch } = useApp();
+
   // 2. Track which button is currently loading
   const [claimingId, setClaimingId] = useState<string | null>(null);
 
@@ -25,7 +25,36 @@ export default function AchievementsPage() {
   const unlockedCount = user.unlockedAchievements?.length || 0;
   const progressPercent = Math.round((unlockedCount / totalAchievements) * 100) || 0;
 
-// ── THE CLAIM FUNCTION ──
+  // ── DYNAMIC PROGRESS CALCULATOR ──
+  const getAchievementProgress = (achievementId: string, isUnlocked: boolean) => {
+    // If it's unlocked, it's 100% complete!
+    if (isUnlocked) return { current: 1, max: 1, show: false };
+
+    // 1. Grind Milestones (e.g., "grind_100" -> requires 100 habits)
+    if (achievementId.startsWith("grind_")) {
+      const target = parseInt(achievementId.split("_")[1]);
+      const current = user.stats?.totalHabitsCompleted || 0;
+      return { current, max: target, show: true };
+    }
+
+    // 2. Big Spender (Requires 1000 gold spent)
+    if (achievementId === "eco_spend") {
+      const current = user.stats?.totalGoldSpent || 0;
+      return { current, max: 1000, show: true };
+    }
+
+    // 3. ⬇️ ADD THE STREAK LOGIC! ⬇️
+    if (achievementId.startsWith("streak_")) {
+      const target = parseInt(achievementId.split("_")[1]);
+      const current = user.stats?.highestStreak || 0;
+      return { current, max: target, show: true };
+    }
+
+    // (Note: Streaks are event-based, and things like "eco_1" are boolean tasks, so we don't show a bar for them)
+    return { current: 0, max: 1, show: false };
+  };
+
+  // ── THE CLAIM FUNCTION ──
   const handleClaim = async (achievementId: string) => {
     setClaimingId(achievementId);
 
@@ -42,7 +71,7 @@ export default function AchievementsPage() {
       }
 
       const data = await res.json();
-      
+
       // ⬇️ NEW: Trigger the Level Up Popup! ⬇️
       // We check the awardResult that the backend sent us
       if (data.awardResult && data.awardResult.leveledUp) {
@@ -67,7 +96,7 @@ export default function AchievementsPage() {
 
   return (
     <div className="max-w-6xl mx-auto p-4 md:p-8 space-y-10 pb-32">
-      
+
       {/* ── Header & Progress ── */}
       <header className="space-y-6">
         <div>
@@ -87,7 +116,7 @@ export default function AchievementsPage() {
             </div>
           </div>
           <div className="h-4 w-full bg-slate-950 rounded-full overflow-hidden border border-slate-800">
-            <motion.div 
+            <motion.div
               initial={{ width: 0 }}
               animate={{ width: `${progressPercent}%` }}
               transition={{ duration: 1.5, ease: "easeOut" }}
@@ -103,14 +132,14 @@ export default function AchievementsPage() {
       <div className="space-y-12">
         {ACHIEVEMENTS_DATA.map((category, catIdx) => (
           <div key={catIdx} className="space-y-6">
-            
+
             <h2 className="text-xl font-bold text-white border-b border-slate-800 pb-2">
               {category.category}
             </h2>
 
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               {category.items.map((achievement, idx) => {
-                
+
                 // 4. SMART CHECK: Look up the exact record to check if it's claimed!
                 const unlockedRecord = user.unlockedAchievements?.find((a: any) => a.achievementId === achievement.id);
                 const isUnlocked = !!unlockedRecord;
@@ -123,15 +152,14 @@ export default function AchievementsPage() {
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ delay: idx * 0.1 }}
                     key={achievement.id}
-                    className={`relative p-5 rounded-2xl border transition-all duration-300 ${
-                      isWaitingToClaim
-                        ? "bg-slate-900 border-yellow-500/80 shadow-[0_0_30px_rgba(234,179,8,0.2)] scale-[1.02]" // Glows Gold if waiting to claim!
-                        : isUnlocked 
+                    className={`relative p-5 rounded-2xl border transition-all duration-300 ${isWaitingToClaim
+                      ? "bg-slate-900 border-yellow-500/80 shadow-[0_0_30px_rgba(234,179,8,0.2)] scale-[1.02]" // Glows Gold if waiting to claim!
+                      : isUnlocked
                         ? "bg-slate-900 border-violet-500/30 hover:border-violet-400 hover:-translate-y-1" // Normal unlocked styling
                         : "bg-slate-950 border-slate-800 opacity-70 grayscale hover:grayscale-0 hover:opacity-100" // Locked styling
-                    }`}
+                      }`}
                   >
-                    
+
                     {/* ── THE STATUS / CLAIM BUTTON CORNER ── */}
                     <div className="absolute top-4 right-4 text-sm z-10">
                       {!isUnlocked && (
@@ -154,11 +182,10 @@ export default function AchievementsPage() {
                     </div>
 
                     <div className="flex items-start gap-4 mb-4 mt-2">
-                      <div className={`w-14 h-14 rounded-xl flex items-center justify-center text-3xl shrink-0 ${
-                        isWaitingToClaim ? "bg-slate-800 border-2 border-yellow-500"
-                        : isUnlocked ? "bg-slate-800 border-2 border-violet-500/30" 
-                        : "bg-slate-900 border border-slate-800"
-                      }`}>
+                      <div className={`w-14 h-14 rounded-xl flex items-center justify-center text-3xl shrink-0 ${isWaitingToClaim ? "bg-slate-800 border-2 border-yellow-500"
+                        : isUnlocked ? "bg-slate-800 border-2 border-violet-500/30"
+                          : "bg-slate-900 border border-slate-800"
+                        }`}>
                         {achievement.icon}
                       </div>
                       <div className="pr-12">
@@ -168,18 +195,41 @@ export default function AchievementsPage() {
                         <p className="text-slate-500 text-xs mt-1 leading-relaxed">
                           {achievement.desc}
                         </p>
+                        {/* ── ⬇️ ADD THIS PROGRESS BAR BLOCK ⬇️ ── */}
+                        {(() => {
+                          const progress = getAchievementProgress(achievement.id, isUnlocked);
+                          if (!progress.show) return null;
+
+                          const percent = Math.min(100, Math.round((progress.current / progress.max) * 100));
+                          const remaining = progress.max - progress.current;
+
+                          return (
+                            <div className="mt-3">
+                              <div className="flex justify-between text-[10px] font-bold uppercase tracking-wider mb-1">
+                                <span className="text-slate-500">{percent}% Complete</span>
+                                <span className="text-violet-400">{remaining} more needed</span>
+                              </div>
+                              <div className="h-1.5 w-full bg-slate-800 rounded-full overflow-hidden">
+                                <div
+                                  className="h-full bg-violet-500 rounded-full transition-all duration-1000"
+                                  style={{ width: `${percent}%` }}
+                                />
+                              </div>
+                            </div>
+                          );
+                        })()}
                       </div>
                     </div>
 
                     <div className={`pt-3 border-t ${isWaitingToClaim ? "border-yellow-500/30" : isUnlocked ? "border-violet-500/20" : "border-slate-800"} flex flex-wrap items-center gap-3`}>
                       <span className="text-xs font-bold text-slate-500 uppercase tracking-wider mr-1">Rewards:</span>
-                      
+
                       {achievement.xp > 0 && (
                         <span className={`text-xs font-bold flex items-center gap-1 ${isUnlocked ? "text-violet-400" : "text-slate-600"}`}>
                           ✨ {achievement.xp}
                         </span>
                       )}
-                      
+
                       {achievement.gold > 0 && (
                         <span className={`text-xs font-bold flex items-center gap-1 ${isUnlocked ? "text-yellow-400" : "text-slate-600"}`}>
                           🪙 {achievement.gold}
@@ -187,9 +237,8 @@ export default function AchievementsPage() {
                       )}
 
                       {achievement.rewardText && (
-                        <span className={`text-xs font-bold flex items-center gap-1 px-2 py-0.5 rounded ${
-                          isUnlocked ? "bg-rose-500/20 text-rose-400" : "bg-slate-800 text-slate-500"
-                        }`}>
+                        <span className={`text-xs font-bold flex items-center gap-1 px-2 py-0.5 rounded ${isUnlocked ? "bg-rose-500/20 text-rose-400" : "bg-slate-800 text-slate-500"
+                          }`}>
                           🎁 {achievement.rewardText}
                         </span>
                       )}

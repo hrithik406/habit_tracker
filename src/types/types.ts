@@ -31,6 +31,8 @@ export interface User {
   stats?: {
     totalHabitsCompleted: number;
     totalAchievements: number;
+    totalGoldSpent: number;
+    highestStreak: number;
   };
   unlockedAchievements: { achievementId: string; unlockedAt: Date; isClaimed: boolean }[];
 }

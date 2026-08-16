@@ -119,11 +119,14 @@ async function runHabitComplete(
 
   // 6. Update Lifetime Stats & Currency
   if (!user.stats) {
-    user.stats = { totalHabitsCompleted: 0, totalAchievements: 0 };
+    user.stats = { totalHabitsCompleted: 0, totalAchievements: 0, totalGoldSpent: 0, highestStreak: 0 };
   }
 
   // Increment total habits
   user.stats.totalHabitsCompleted += 1;
+
+  // It checks if the streak they just got is higher than their all-time highest record!
+  user.stats.highestStreak = Math.max(user.stats.highestStreak || 0, newStreak);
 
   // ── NEW: RUN THE ACHIEVEMENT ENGINE ──
   const { newlyUnlocked } = evaluateAchievements(user, newStreak);
@@ -135,13 +138,15 @@ async function runHabitComplete(
   user.stats.totalAchievements += newlyUnlocked.length;
 
   // ⬅️ FIX 1: ACTUALLY DEPOSIT THE BASE REWARDS INTO THE USER'S ACCOUNT!
- const awardResult = user.awardCurrency(finalXpAwarded, goldAwarded);
+  const awardResult = user.awardCurrency(finalXpAwarded, goldAwarded);
 
   // Check for Streak Milestone Achievement (Every 7 days)
   const milestoneReached = newStreak > 0 && newStreak % 7 === 0;
   if (milestoneReached) {
-    user.stats.totalAchievements += 1; 
-  } 
+    user.stats.totalAchievements += 1;
+  }
+
+  user.markModified("stats");
 
   await user.save();
 
@@ -156,7 +161,7 @@ async function runHabitComplete(
 
   return {
     updatedHabit: habit,
-    newlyUnlocked : newlyUnlockedIds, // ⬅️ The router will automatically pass this to the frontend!
+    newlyUnlocked: newlyUnlockedIds, // ⬅️ The router will automatically pass this to the frontend!
     streakResult: {
       previousStreak: newStreak === 1 ? 0 : newStreak - 1,
       newStreak,
@@ -188,6 +193,9 @@ router.get("/", async (req: Request, res: Response): Promise<void> => {
     const yesterday = getYesterday(currentDate); // ⬅️ Get yesterday's date using your helper function
 
     const habits = await Habit.find({ userId, isArchived: false }).sort({ createdAt: 1 });
+    // ⬇️ 1. Variable to track the true highest streak across all habits
+    let actualHighestStreak = 0;
+    let userNeedsSave = false;
 
     for (let habit of habits) {
       let needsSave = false;
@@ -222,6 +230,14 @@ router.get("/", async (req: Request, res: Response): Promise<void> => {
       // Save the cleaned-up habit to the database before sending to React
       if (needsSave) {
         await habit.save();
+      }
+      // ⬇️ 2. AUTO-SYNC SYTEM: If the user's global stat is lower than their actual highest habit, fix it!
+      if (!user.stats) user.stats = { totalHabitsCompleted: 0, totalAchievements: 0, totalGoldSpent: 0, highestStreak: 0 };
+
+      if ((user.stats.highestStreak || 0) < actualHighestStreak) {
+        user.stats.highestStreak = actualHighestStreak;
+        user.markModified("stats");
+        await user.save();
       }
     }
 

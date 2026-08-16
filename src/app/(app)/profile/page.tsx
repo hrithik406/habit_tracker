@@ -19,7 +19,7 @@ function getLevelTitle(level: number): string {
 
 export default function ProfilePage() {
   // ⬇️ 1. Grabbed dispatch for the Optimistic UI update
-  const { user, dispatch } = useApp(); 
+  const { user, dispatch } = useApp();
 
   // ── Local UI State ──
   const [isEditingName, setIsEditingName] = useState(false);
@@ -38,16 +38,26 @@ export default function ProfilePage() {
       setDraftName(user.username || "HabitMaster");
 
       const avatarItem = user.ownedRewards?.find((r: any) => r.itemId.startsWith("avatar_"));
-      setActiveAvatarId(user.activeAvatar || avatarItem?.itemId || "default" );
+      setActiveAvatarId(user.activeAvatar || avatarItem?.itemId || "default");
 
-      // Auto-fill showcase with first 4 badges if they haven't explicitly set them
-      const ownedBadges = user.ownedRewards?.filter((r: any) => r.itemId.startsWith("badge_")) || [];
-      setShowcase([
-        ownedBadges[0]?.itemId || null,
-        ownedBadges[1]?.itemId || null,
-        ownedBadges[2]?.itemId || null,
-        ownedBadges[3]?.itemId || null,
-      ]);
+      // Check if the user already has a saved showcase in the database
+      if (user.showcase && user.showcase.length > 0) {
+
+        // Use the saved one from the backend!
+        setShowcase(user.showcase);
+
+      } else {
+
+        // Only auto-fill for brand new users who have never saved a showcase
+        const ownedBadges = user.ownedRewards?.filter((r: any) => r.itemId.startsWith("badge_")) || [];
+        setShowcase([
+          ownedBadges[0]?.itemId || null,
+          ownedBadges[1]?.itemId || null,
+          ownedBadges[2]?.itemId || null,
+          ownedBadges[3]?.itemId || null,
+        ]);
+
+      }
     }
   }, [user]);
 
@@ -60,19 +70,19 @@ export default function ProfilePage() {
   }
 
   const levelTitle = getLevelTitle(user.level || 1);
-  
+
   // ⬇️ 2. Smart Icon Fetching for the main profile picture!
   const currentAvatarIcon = getItemIcon(activeAvatarId);
 
   // ⬇️ 3. Smart Cosmetic Fetching for the Modals!
   const allCosmetics = getCosmetics();
-  const userOwnedCosmetics = allCosmetics.filter(cosmetic => 
+  const userOwnedCosmetics = allCosmetics.filter(cosmetic =>
     user.ownedRewards?.some((reward: any) => reward.itemId === cosmetic.id)
   );
 
   // ── Handlers ──
   const saveProfileToDatabase = async (updates: { username?: string, activeAvatar?: string, showcase?: (string | null)[] }) => {
-    
+
     // 1. Remember how many achievements the user had BEFORE saving
     const previousAchievementCount = user.unlockedAchievements?.length || 0;
 
@@ -91,20 +101,20 @@ export default function ProfilePage() {
 
       // 3. GET THE REAL DATA BACK FROM THE SERVER!
       const data = await res.json();
-      
+
       // 4. Update global state with the true database state (which includes the new achievement!)
       dispatch({ type: "UPDATE_USER", payload: data.user });
 
       // 5. ⬇️ CHECK IF THEY GOT THE FASHIONISTA ACHIEVEMENT ⬇️
       const newAchievementCount = data.user.unlockedAchievements?.length || 0;
-      
+
       if (newAchievementCount > previousAchievementCount) {
         // Find the exact ID of the newest achievement (the last one in the array)
         const newestAchievementId = data.user.unlockedAchievements[newAchievementCount - 1].achievementId;
-        
+
         // FIRE THE POPUP! 🚀
-        window.dispatchEvent(new CustomEvent("achievement-unlocked", { 
-          detail: [newestAchievementId] 
+        window.dispatchEvent(new CustomEvent("achievement-unlocked", {
+          detail: [newestAchievementId]
         }));
       }
 

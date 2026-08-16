@@ -50,6 +50,8 @@ export interface IUser extends Document {
   stats: {
     totalHabitsCompleted: number;
     totalAchievements: number;
+    totalGoldSpent: number;
+    highestStreak: number;
   };
 
   unlockedAchievements: { achievementId: string; unlockedAt: Date; isClaimed: boolean }[];
@@ -105,7 +107,9 @@ const userSchema = new Schema<IUser>(
     // Stats
     stats: {
       totalHabitsCompleted: { type: Number, default: 0 },
-      totalAchievements: { type: Number, default: 0 }
+      totalAchievements: { type: Number, default: 0 },
+      totalGoldSpent: { type: Number, default: 0 },
+      highestStreak: { type: Number, default: 0 }
     },
 
     // Unlocked Achievements

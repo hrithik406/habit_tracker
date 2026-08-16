@@ -19,7 +19,7 @@ export default function TopHeader() {
   if (!user) return <div className="h-16 w-full border-b border-slate-800 bg-slate-950/80" />;
 
   return (
-    <header className="sticky top-0 z-40 w-full h-16 flex items-center justify-end px-4 md:px-8 border-b border-slate-800 bg-slate-950/80 backdrop-blur-md">
+    <header className="max-lg:hidden sticky top-0 z-40 w-full h-16 flex items-center justify-end px-4 md:px-8 border-b border-slate-800 bg-slate-950/80 backdrop-blur-md">
       
       {/* ── 2. NEW FLEX CONTAINER FOR ACTIVE POWERUPS ── */}
       {user.activePowerups && user.activePowerups.length > 0 && (

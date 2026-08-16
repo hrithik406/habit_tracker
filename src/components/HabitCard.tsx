@@ -338,7 +338,7 @@ const HabitCard = memo(function HabitCard({ habit }: { habit: Habit }): ReactEle
       </AnimatePresence>
 
       {/* ── Card header ─────────────────────────────────────────── */}
-      <div className="flex items-start gap-3 p-4">
+      <div className="flex items-start gap-3 py-4 px-2">
 
         {/* Icon + Progress Ring Wrapper */}
         <div className="relative flex items-center justify-center shrink-0 w-12 h-12">
@@ -394,11 +394,11 @@ const HabitCard = memo(function HabitCard({ habit }: { habit: Habit }): ReactEle
           <div className="flex items-center gap-3 mt-1.5">
             <span className={`flex items-center gap-1 text-xs font-bold ${streakColor(habit.currentStreak)}`}>
               🔥 {habit.currentStreak}
-              <span className="text-slate-500 font-normal">streak</span>
+              <span className="text-slate-500 max-lg:hidden font-normal">streak</span>
             </span>
-            <span className="text-xs text-slate-500">+{habit.baseXp}XP · +{habit.baseGold}🪙</span>
+            <span className="text-xs text-center text-slate-500">+{habit.baseXp}XP · +{habit.baseGold}🪙</span>
             {hasMilestones && (
-              <span className="text-xs text-slate-500">
+              <span className="text-xs text-center text-slate-500">
                 {completedCount}/{milestones.length} steps
               </span>
             )}

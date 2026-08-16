@@ -31,6 +31,7 @@ export default function PowerupIndicator({ itemId, expiresAt, hideTooltip = fals
         setHasExpired(true);
         return; 
       }
+      setHasExpired(false);
       setTimeLeftStr(formatTimeRemaining(diff));
     };
 

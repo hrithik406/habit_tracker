@@ -1,6 +1,6 @@
 import { Router, Request, Response } from "express";
 import User from "../models/User";
-import { SHOP_ITEMS } from "../../shared/item"; 
+import { SHOP_ITEMS } from "../../shared/item";
 
 const router = Router();
 
@@ -56,22 +56,24 @@ router.post(
       // 6. Execute Transaction
       user.gold -= item.cost;
 
-      // Save to the user's inventory
-      user.ownedRewards.push({
-        itemId: item.id,
-        name: item.name,
-        purchasedAt: new Date(),
-      });
+      // ⬇️ UPDATE THEIR STATS ⬇️
+      if (!user.stats) user.stats = { totalHabitsCompleted: 0, totalAchievements: 0, totalGoldSpent: 0, highestStreak: 0 };
+      user.stats.totalGoldSpent = (user.stats.totalGoldSpent || 0) + item.cost;
 
-      // ── ⬇️ NEW: BIG SPENDER ACHIEVEMENT ⬇️ ──
-      // Triggers the first time they buy an item in the shop
-      const hasEcoSpend = user.unlockedAchievements.some((a: any) => a.achievementId === "eco_spend");
-      if (!hasEcoSpend) {
-        user.unlockedAchievements.push({ 
-          achievementId: "eco_spend", 
-          unlockedAt: new Date(), 
-          isClaimed: false 
-        } as any);
+      // Save to the user's inventory
+      user.ownedRewards.push({ itemId: item.id, name: item.name, purchasedAt: new Date() });
+
+      // ── NEW: REAL BIG SPENDER LOGIC ──
+      // Check if they finally hit the 1,000 gold mark!
+      if (user.stats.totalGoldSpent >= 1000) {
+        const hasEcoSpend = user.unlockedAchievements.some((a: any) => a.achievementId === "eco_spend");
+        if (!hasEcoSpend) {
+          user.unlockedAchievements.push({
+            achievementId: "eco_spend",
+            unlockedAt: new Date(),
+            isClaimed: false
+          } as any);
+        }
       }
 
       await user.save();
@@ -116,17 +118,29 @@ router.post("/equip", async (req: Request, res: Response): Promise<void> => {
       return;
     }
 
-    // Toggle logic
+// Toggle & Consume logic
     if (category === "theme") {
       user.activeTheme = user.activeTheme === itemId ? null : itemId;
     } else if (category === "cosmetic") {
       user.activeAvatar = user.activeAvatar === itemId ? null : itemId;
     } else if (category === "powerup") {
-      const existingIndex = user.activePowerups.findIndex((p: any) => p.itemId === itemId);
-      if (existingIndex >= 0) {
-        user.activePowerups.splice(existingIndex, 1);
+      
+      // 1. CONSUME THE ITEM: Remove one instance of it from their inventory
+      const inventoryIndex = user.ownedRewards.findIndex((r: any) => r.itemId === itemId);
+      if (inventoryIndex > -1) {
+        user.ownedRewards.splice(inventoryIndex, 1);
+      }
+
+      // 2. STACK THE DURATION
+      const existingPowerup = user.activePowerups.find((p: any) => p.itemId === itemId);
+      
+      if (existingPowerup) {
+        // It is already active! Add exactly 24 hours to its CURRENT expiration time
+        const currentExpTime = new Date(existingPowerup.expiresAt).getTime();
+        existingPowerup.expiresAt = new Date(currentExpTime + (24 * 60 * 60 * 1000));
       } else {
-        const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
+        // It is not active yet. Start a fresh 24-hour timer from right now!
+        const expiresAt = new Date(Date.now() + (24 * 60 * 60 * 1000));
         user.activePowerups.push({ itemId, expiresAt });
       }
     }
@@ -136,23 +150,28 @@ router.post("/equip", async (req: Request, res: Response): Promise<void> => {
     if (category === "cosmetic" || category === "theme") {
       const hasEco1 = user.unlockedAchievements.some((a: any) => a.achievementId === "eco_1");
       if (!hasEco1) {
-        user.unlockedAchievements.push({ 
-          achievementId: "eco_1", 
-          unlockedAt: new Date(), 
-          isClaimed: false 
+        user.unlockedAchievements.push({
+          achievementId: "eco_1",
+          unlockedAt: new Date(),
+          isClaimed: false
         } as any);
       }
     }
 
+    // CRITICAL: Force Mongoose to save the array mutations!
+    user.markModified("ownedRewards");
+    user.markModified("activePowerups");
+
     await user.save();
 
     res.json({
-      message: `Successfully updated ${category}`,
+      message: `Successfully activated ${category}`,
       user: {
         activeTheme: user.activeTheme,
         activeAvatar: user.activeAvatar,
         activePowerups: user.activePowerups,
-        unlockedAchievements: user.unlockedAchievements, // ⬅️ Sent to UI for instant notification!
+        ownedRewards: user.ownedRewards, // ⬅️ NEW: Sent to UI so React knows the item is gone!
+        unlockedAchievements: user.unlockedAchievements, 
       },
     });
   } catch (err) {

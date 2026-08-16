@@ -6,6 +6,7 @@ import { useApp } from "../context/AppContext";
 import type { User } from "../types/types";
 import { motion, AnimatePresence } from "framer-motion"; // ⬅️ Added framer-motion
 import PowerupIndicator from "./PowerupIndicator";
+import { getItemIcon } from "../../shared/item";
 
 interface NavItem { href: string; label: string; icon: string; }
 
@@ -38,7 +39,7 @@ const XPBar = memo(function XPBar({ user }: { user: User | null }) {
 });
 
 // ── Currency badge ─────────────────────────────────────────────────
-const CurrencyBadge = memo(function CurrencyBadge({ user }: { user: User | null }) {
+const CurrencyBadge = memo(function CurrencyBadge({ user, hid = "" }: { user: User | null; hid?: string; }) {
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
@@ -50,7 +51,7 @@ const CurrencyBadge = memo(function CurrencyBadge({ user }: { user: User | null 
   return (
     <div className="flex items-center gap-3 px-3 py-2 text-sm">
       <span className="flex items-center gap-1 text-yellow-400 font-semibold">🪙 {user.gold ?? 0}</span>
-      <span className="flex items-center gap-1 text-violet-400 font-semibold">✨ {user.xp ?? 0}</span>
+      <span className={`flex ${hid} items-center gap-1 text-violet-400 font-semibold`}>✨ {user.xp ?? 0}</span>
     </div>
   );
 });
@@ -103,19 +104,6 @@ const Sidebar = memo(function Sidebar({ pathname, collapsed, onToggle, user }: S
         })}
       </nav>
 
-      {/* {user?.activePowerups && user.activePowerups.length > 0 && (
-        <div className="flex items-center gap-2.5 border-slate-800 pr-6 h-5">
-          {user.activePowerups.map((pu) => (
-            // 3. Render an indicator for each active powerup
-            <PowerupIndicator
-              key={pu.itemId}
-              itemId={pu.itemId}
-              expiresAt={pu.expiresAt}
-            />
-          ))}
-        </div>
-      )} */}
-
       {!collapsed && (
         <div className="border-t border-slate-800 pb-4">
           <div className="flex">
@@ -145,17 +133,17 @@ const Sidebar = memo(function Sidebar({ pathname, collapsed, onToggle, user }: S
 const BottomNav = memo(function BottomNav({ pathname }: { pathname: string }) {
   return (
     <nav
-      className="lg:hidden fixed bottom-0 left-0 right-0 z-50 bg-slate-900/95 backdrop-blur-md border-t border-slate-800"
+      className="lg:hidden fixed bottom-0 mx-4 left-0 right-0 z-50 bg-slate-900/70 backdrop-blur-md rounded-4xl border border-slate-800"
       aria-label="Mobile navigation"
     >
-      <div className="flex items-center justify-around px-2 py-1">
+      <div className="flex items-center justify-around p-1">
         {NAV_ITEMS.map((item) => {
           const active = pathname === item.href || pathname.startsWith(item.href + "/");
           return (
             <Link
               key={item.href}
               href={item.href}
-              className={`flex flex-col items-center gap-0.5 px-4 py-2 rounded-xl transition-colors relative ${active ? "text-violet-400" : "text-slate-500"
+              className={`flex flex-col items-center gap-0.5 p-2 rounded-xl transition-colors relative ${active ? "text-violet-400" : "text-slate-500"
                 }`}
             >
               <span className={`text-xl transition-transform duration-150 ${active ? "scale-110" : ""}`}>
@@ -220,14 +208,55 @@ export default function DashboardLayout({ children }: DashboardLayoutProps): Rea
 
             <div className="flex-1 flex flex-col min-w-0">
               {/* Mobile top bar */}
-              <header className="lg:hidden flex items-center justify-between px-4 py-3 border-b border-slate-800 bg-slate-900">
+              <header className="lg:hidden fixed z-100 w-full flex items-center justify-between px-4 py-2 border-b border-slate-800 bg-slate-900/70 backdrop-blur-sm">
                 <Link href="/dashboard" className="text-white font-bold text-lg">
                   Habit<span className="text-violet-400">Quest</span>
                 </Link>
-                <CurrencyBadge user={user} />
+                <div className="flex">
+                  <CurrencyBadge user={user} hid="hidden" />
+                  {user.activePowerups && user.activePowerups.length > 0 && (
+                    <div className="flex items-center gap-2.5 mr-4 border-r border-slate-800 pr-4 h-10">
+                      {user.activePowerups.map((pu) => (
+                        // 3. Render an indicator for each active powerup
+                        <PowerupIndicator
+                          key={pu.itemId}
+                          itemId={pu.itemId}
+                          expiresAt={pu.expiresAt}
+                        />
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Profile Link (unchanged) */}
+                  <Link href="/profile">
+                    <motion.div
+                      initial={{ opacity: 0, x: 20 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      transition={{ duration: 0.6, ease: "easeOut" }}
+                      className="flex items-center gap-3 rounded-full hover:bg-slate-900 border border-transparent hover:border-slate-800 transition-all cursor-pointer group"
+                    >
+                      <div className="text-right hidden sm:block">
+                        <p className="text-sm font-bold text-white group-hover:text-violet-400 transition-colors">
+                          {user.username || "Player"}
+                        </p>
+                        <p className="text-xs font-bold text-yellow-500">
+                          Lvl {user.level || 1}
+                        </p>
+                      </div>
+
+                      <motion.div
+                        animate={{ y: [-3, 3, -3] }}
+                        transition={{ repeat: Infinity, duration: 4, ease: "easeInOut" }}
+                        className="w-8 h-8 rounded-full bg-slate-800 border-2 border-violet-500/50 flex items-center justify-center text-xl shadow-[0_0_10px_rgba(124,58,237,0.2)] group-hover:shadow-[0_0_15px_rgba(124,58,237,0.4)] transition-shadow"
+                      >
+                        {getItemIcon(user.activeAvatar)}
+                      </motion.div>
+                    </motion.div>
+                  </Link>
+                </div>
               </header>
 
-              <main className="flex-1 overflow-auto pb-20 lg:pb-0">
+              <main className="flex-1 overflow-auto pb-20 lg:pb-0 max-lg:mt-12">
                 {children}
               </main>
             </div>

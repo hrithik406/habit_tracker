@@ -4,7 +4,7 @@ import React, { useState, ReactElement } from "react";
 import { useApp } from "../context/AppContext";
 import type { ShopCategory, User } from "../types/types";
 import { SHOP_ITEMS, ShopItem } from "@/../shared/item";
-
+import PowerupIndicator from "@/components/PowerupIndicator"; // ⬅️ Imported the Indicator
 
 export default function RewardShop(): ReactElement {
   const { user, updateUser, toggleEquip } = useApp();
@@ -19,7 +19,7 @@ export default function RewardShop(): ReactElement {
     if (itemCategory === "theme") return user?.activeTheme === itemId;
     if (itemCategory === "cosmetic") return user?.activeAvatar === itemId;
     if (itemCategory === "powerup") return !!user?.activePowerups?.some((p) => p.itemId === itemId);
-     return false;
+    return false;
   };
 
   const showToast = (type: "success" | "error", msg: string) => {
@@ -39,7 +39,6 @@ export default function RewardShop(): ReactElement {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Purchase failed");
 
-      // Sync the user's currency and new inventory item
       updateUser({ gold: data.user.gold, ownedRewards: data.user.ownedRewards });
       showToast("success", data.message);
     } catch (err) {
@@ -54,7 +53,7 @@ export default function RewardShop(): ReactElement {
     setLoadingId(item.id);
     try {
       await toggleEquip(item.id, item.category);
-      showToast("success", `Updated active ${item.category}`);
+      showToast("success", `Successfully activated ${item.name}`);
     } catch (err) {
       showToast("error", "Failed to change equipment");
     } finally {
@@ -76,10 +75,10 @@ export default function RewardShop(): ReactElement {
           <h2 className="text-xl font-bold text-white">Reward Shop</h2>
           <p className="text-sm text-slate-400">Spend your gold on exclusive upgrades</p>
         </div>
-        <div className="flex items-center gap-2 bg-slate-800 px-3 py-2 rounded-xl w-fit">
+        {/* <div className="flex items-center gap-2 bg-slate-800 px-3 py-2 rounded-xl w-fit">
           <span className="text-yellow-400 font-bold text-lg">🪙 {user?.gold ?? 0}</span>
           <span className="text-xs text-slate-400">available</span>
-        </div>
+        </div> */}
       </div>
 
       {/* ── Category Filters ── */}
@@ -100,17 +99,25 @@ export default function RewardShop(): ReactElement {
 
       {/* ── Item Grid ── */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-        {displayItems.map((item) => (
-          <ShopItemCard
-            key={item.id}
-            item={item}
-            user={user}
-            isLoading={loadingId === item.id}
-            equipped={isEquipped(item.id, item.category)}
-            onBuy={() => handleBuy(item)}
-            onEquip={() => handleEquip(item)}
-          />
-        ))}
+        {displayItems.map((item) => {
+          // ⬇️ Extract the active powerup object so we have the expiresAt timestamp
+          const activePowerup = item.category === "powerup" 
+            ? user?.activePowerups?.find((p) => p.itemId === item.id) 
+            : undefined;
+
+          return (
+            <ShopItemCard
+              key={item.id}
+              item={item}
+              user={user}
+              isLoading={loadingId === item.id}
+              equipped={isEquipped(item.id, item.category)}
+              activePowerup={activePowerup}
+              onBuy={() => handleBuy(item)}
+              onEquip={() => handleEquip(item)}
+            />
+          );
+        })}
       </div>
 
       {/* ── Toast ── */}
@@ -130,6 +137,7 @@ function ShopItemCard({
   user,
   isLoading,
   equipped,
+  activePowerup,
   onBuy,
   onEquip,
 }: {
@@ -137,54 +145,60 @@ function ShopItemCard({
   user: User | null;
   isLoading: boolean;
   equipped: boolean;
+  activePowerup?: { itemId: string; expiresAt: string | Date };
   onBuy: () => void;
   onEquip: () => void;
 }) {
-  // Check conditions
   const owned = user?.ownedRewards?.some((r) => r.itemId === item.id);
   const isLocked = (user?.level ?? 1) < item.levelRequired;
   const cantAfford = (user?.gold ?? 0) < item.cost;
+  const isActivePowerup = item.category === "powerup" && !!activePowerup;
 
-  // Render the proper button based on item properties
   const renderActionButton = () => {
     if (isLoading) {
       return (
-        <button disabled className="w-full py-2 rounded-lg text-sm font-bold bg-slate-700 text-slate-400 cursor-not-allowed">
+        <button disabled className="w-full py-2.5 rounded-lg text-sm font-bold bg-slate-700 text-slate-400 cursor-not-allowed">
           Processing...
         </button>
       );
     }
 
-    // ── Case 1: Powerup Rules ──
+    // ── Case 1: Powerup Rules (STACKING LOGIC) ──
     if (item.category === "powerup") {
-      if (equipped) {
-        return (
-          <button disabled className="w-full py-2 rounded-lg text-sm font-bold bg-emerald-700/40 text-emerald-400 border border-emerald-500/30 cursor-not-allowed">
-            Active (24h)
-          </button>
-        );
-      }
-
       if (owned) {
+        // They bought it and it's in their inventory -> They can activate it
         return (
           <button
             onClick={onEquip}
-            className="w-full py-2 rounded-lg text-sm font-bold transition-colors bg-emerald-600 text-white hover:bg-emerald-500"
+            className="w-full py-2.5 rounded-xl text-sm font-black tracking-wide transition-all bg-violet-600 text-white hover:bg-violet-500 shadow-lg active:scale-95"
           >
-            Activate
+            {isActivePowerup ? "✨ Extend Timer (+24h)" : "⚡ Activate (24h)"}
           </button>
         );
       }
 
+      // They DO NOT own it -> They need to buy it
       return (
-        <button
-          onClick={onBuy}
-          disabled={isLocked || cantAfford}
-          className={`w-full py-2 rounded-lg text-sm font-bold transition-colors ${isLocked || cantAfford ? "bg-slate-700 text-slate-500 cursor-not-allowed" : "bg-violet-600 text-white hover:bg-violet-500"
+        <div className="space-y-2">
+          <button
+            onClick={onBuy}
+            disabled={isLocked || cantAfford}
+            className={`w-full py-2.5 rounded-xl text-sm font-black tracking-wide transition-all active:scale-95 ${
+              isLocked || cantAfford
+                ? "bg-slate-700 text-slate-500 cursor-not-allowed"
+                : "bg-yellow-500 hover:bg-yellow-400 text-yellow-950 shadow-lg"
             }`}
-        >
-          {isLocked ? "Locked" : "Buy"}
-        </button>
+          >
+            {isLocked ? "Locked" : isActivePowerup ? `Buy to Stack - ${item.cost} 🪙` : `Buy - ${item.cost} 🪙`}
+          </button>
+
+          {/* Upsell helper text */}
+          {isActivePowerup && !isLocked && !cantAfford && (
+            <p className="text-center text-[10px] text-violet-400 font-bold uppercase tracking-wider animate-pulse">
+              Buy another to extend your timer!
+            </p>
+          )}
+        </div>
       );
     }
 
@@ -203,7 +217,6 @@ function ShopItemCard({
       );
     }
 
-    // Default: Not owned yet, show purchase option
     return (
       <button
         onClick={onBuy}
@@ -216,19 +229,39 @@ function ShopItemCard({
     );
   };
 
+  // Determine card styling based on active state
+  let cardStyle = "bg-slate-800 border-slate-700";
+  if (isActivePowerup) {
+    cardStyle = "bg-slate-900 border-violet-500/50 shadow-[0_0_20px_rgba(124,58,237,0.15)]";
+  } else if (equipped && item.category !== "powerup") {
+    cardStyle = "bg-slate-800/80 border-emerald-500/50 shadow-md shadow-emerald-950/20";
+  }
+
   return (
-    <div className={`rounded-xl p-4 flex flex-col h-full border transition-all ${equipped ? "bg-slate-800/80 border-emerald-500/50 shadow-md shadow-emerald-950/20" : "bg-slate-800 border-slate-700"
-      }`}>
+    <div className={`relative rounded-xl p-5 flex flex-col h-full border transition-all duration-300 ${cardStyle}`}>
+      
+      {/* ── ⬇️ THE LIVE TIMER INDICATOR ⬇️ ── */}
+      {isActivePowerup && (
+        <div className="absolute top-3 right-3 z-10">
+          <PowerupIndicator 
+            itemId={item.id} 
+            expiresAt={activePowerup.expiresAt} 
+            hideTooltip={true} // Hide hover tooltip in the shop grid
+          />
+        </div>
+      )}
 
       {/* Icon & Title */}
       <div className="flex justify-between items-start mb-2">
-        <div>
-          <h3 className="text-lg font-bold text-white">{item.name}</h3>
+        <div className="pr-12"> {/* Padding right prevents text overlapping the absolute timer */}
+          <h3 className="text-lg font-bold text-white leading-tight">{item.name}</h3>
           <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
             {item.category}
           </span>
         </div>
-        <span className="text-3xl">{item.icon}</span>
+        {!isActivePowerup && (
+           <span className="text-3xl">{item.icon}</span>
+        )}
       </div>
 
       {/* Description */}
@@ -237,7 +270,8 @@ function ShopItemCard({
       </p>
 
       {/* Show Price & Requirements ONLY if it hasn't been permanently unlocked yet */}
-      {(!owned && item.category !== "powerup" || item.category === "powerup" && !equipped) && (
+      {/* (For powerups, we also check if they don't own it in inventory to hide price when they just need to 'Activate') */}
+      {(!owned && item.category !== "powerup" || item.category === "powerup" && !owned) && (
         <div className="flex justify-between items-center mb-4 text-sm font-semibold">
           <span className={cantAfford ? "text-red-400" : "text-yellow-400"}>
             🪙 {item.cost}
