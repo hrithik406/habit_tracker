@@ -165,4 +165,4 @@ export interface AppState {
 }
 
 // ── Nav ───────────────────────────────────────────────────────────
-export type RoutePath =  "/dashboard" | "/habits" | "/rewards" | "/progress" | "/achievements";
+export type RoutePath =  "/dashboard" | "/habits" | "/shop" | "/progress" | "/rewards";

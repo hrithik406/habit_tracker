@@ -392,7 +392,7 @@ const HabitCard = memo(function HabitCard({ habit }: { habit: Habit }): ReactEle
           )}
 
           <div className="flex items-center gap-3 mt-1.5">
-            <span className={`flex items-center gap-1 text-xs font-bold ${streakColor(habit.currentStreak)}`}>
+            <span className={`flex items-center gap-1 w-fit text-xs font-bold ${streakColor(habit.currentStreak)}`}>
               🔥 {habit.currentStreak}
               <span className="text-slate-500 max-lg:hidden font-normal">streak</span>
             </span>

@@ -13,9 +13,9 @@ interface NavItem { href: string; label: string; icon: string; }
 const NAV_ITEMS: NavItem[] = [
   { href: "/dashboard", label: "Dashboard", icon: "⚡" },
   { href: "/habits", label: "Habits", icon: "🔥" },
-  { href: "/rewards", label: "Rewards", icon: "🏆" },
+  { href: "/shop", label: "Shop", icon: "🛒" },
   { href: "/progress", label: "Progress", icon: "📊" },
-  { href: "/achievements", label: "Achievements", icon: "📊" },
+  { href: "/rewards", label: "Rewards", icon: "🏆" },
 ];
 
 // ── XP Bar ────────────────────────────────────────────────────────
@@ -70,7 +70,7 @@ const Sidebar = memo(function Sidebar({ pathname, collapsed, onToggle, user }: S
       className="hidden lg:flex flex-col bg-slate-900 border-r border-slate-800 h-screen sticky top-0 overflow-hidden shrink-0 transition-[width] duration-200 ease-in-out"
       style={{ width: collapsed ? 64 : 220 }}
     >
-      <div className="flex items-center justify-between px-3 py-4 border-b border-slate-800 min-h-15">
+      <div className="flex items-center justify-between px-3 py-[13.5px] border-b border-slate-800 min-h-15">
         {!collapsed && (
           <Link href="/dashboard" className="text-white font-bold text-lg tracking-tight">
             Habit<span className="text-violet-400">Quest</span>
@@ -133,10 +133,10 @@ const Sidebar = memo(function Sidebar({ pathname, collapsed, onToggle, user }: S
 const BottomNav = memo(function BottomNav({ pathname }: { pathname: string }) {
   return (
     <nav
-      className="lg:hidden fixed bottom-0 mx-4 left-0 right-0 z-50 bg-slate-900/70 backdrop-blur-md rounded-4xl border border-slate-800"
+      className="lg:hidden fixed bottom-1 mx-4 left-0 right-0 z-50 bg-slate-900/70 backdrop-blur-md rounded-4xl border border-slate-800"
       aria-label="Mobile navigation"
     >
-      <div className="flex items-center justify-around p-1">
+      <div className="flex items-center justify-around px-1">
         {NAV_ITEMS.map((item) => {
           const active = pathname === item.href || pathname.startsWith(item.href + "/");
           return (
@@ -150,7 +150,7 @@ const BottomNav = memo(function BottomNav({ pathname }: { pathname: string }) {
                 {item.icon}
               </span>
               <span className="text-[10px] font-medium">{item.label}</span>
-              {active && <div className="absolute -top-0.5 w-8 h-0.5 bg-violet-400 rounded-full" />}
+              {active && <div className="absolute top-0 w-8 h-0.5 bg-violet-400 rounded-full" />}
             </Link>
           );
         })}

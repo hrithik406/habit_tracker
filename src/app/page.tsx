@@ -96,7 +96,7 @@ const FaqAccordion = () => {
 
 export default function LandingPage() {
   return (
-    <div className="theme-obsidian relative w-full min-h-screen bg-slate-950 text-white overflow-hidden font-sans selection:bg-violet-500/30">
+    <div className="theme-obsidian relative w-full min-h-dvh bg-slate-950 text-white overflow-hidden font-sans selection:bg-violet-500/30">
 
       {/* ── Background Glow Effects ── */}
       <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] rounded-full bg-violet-600/20 blur-[120px] pointer-events-none" />
